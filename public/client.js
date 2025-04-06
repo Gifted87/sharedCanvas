@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteBtn = document.getElementById("delete-btn");
   const downloadBtn = document.getElementById("download-btn");
   const editTagsBtn = document.getElementById("edit-tags-btn"); // Context menu item for tags
+  const copyTextBtn = document.getElementById("copy-text-btn");
 
   const pasteDialog = document.getElementById("paste-dialog");
   const pasteTextarea = document.getElementById("paste-textarea");
@@ -56,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pasteDialogCancelBtn = document.getElementById(
     "paste-dialog-cancel-btn"
   );
-
+  let textToCopy = null;
   const tagEditorDialog = document.getElementById("tag-editor-dialog");
   const tagEditorTitle = document.getElementById("tag-editor-title");
   const currentTagsContainer = document.getElementById(
@@ -265,52 +266,129 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Drawing Specific Item Types ---
 
+  // Find the existing drawText function in public/client.js
+  // Replace the ENTIRE function with this enhanced version:
+
   function drawText(item) {
     const drawX = item.x || 0;
     const drawY = item.y || 0;
-    const maxWidth = 250; // Max width in world units
-    const padding = 10;
-    const fontSize = 16; // Font size in world units (appears smaller when zoomed out)
-    const lineHeight = fontSize * 1.2;
+    const cardMaxWidth = 250; // Max width of the text card in world units
+    const padding = 12; // Padding inside the card
+    const fontSize = 16; // Base font size in world units
+    const lineHeight = fontSize * 1.25; // Increased line height for readability
+    const maxLinesToDisplay = 10; // Max lines to show
+    const cornerRadius = 8; // For rounded corners
 
     ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
 
-    // Calculate lines for wrapping
-    const lines = [];
-    const words = String(item.content || "").split(" "); // Ensure content is string
+    // 1. Calculate all wrapped lines based on original content
+    const allCalculatedLines = [];
+    const words = String(item.content || "").split(" ");
     let currentLine = "";
-    words.forEach((word) => {
+    let lineCount = 0; // Keep track of lines generated
+
+    for (const word of words) {
       const testLine = currentLine ? currentLine + " " + word : word;
       const metrics = ctx.measureText(testLine);
-      if (metrics.width > maxWidth - 2 * padding && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
+
+      if (metrics.width > cardMaxWidth - 2 * padding && currentLine) {
+        // Word doesn't fit, push the current line
+        allCalculatedLines.push(currentLine);
+        lineCount++;
+        currentLine = word; // Start new line with the current word
       } else {
+        // Word fits, add it to the current line
         currentLine = testLine;
       }
-    });
-    lines.push(currentLine);
+    }
+    // Push the last remaining line
+    if (currentLine) {
+      allCalculatedLines.push(currentLine);
+      lineCount++;
+    }
 
-    const textHeight = lines.length * lineHeight;
-    const cardWidth = maxWidth; // Use fixed width for simplicity
-    const cardHeight = textHeight + 2 * padding;
+    // 2. Determine lines to display and if truncation occurred
+    let displayLines = [];
+    let truncated = false;
+    if (allCalculatedLines.length > maxLinesToDisplay) {
+      displayLines = allCalculatedLines.slice(0, maxLinesToDisplay);
+      truncated = true;
+      // Add ellipsis to the last displayed line
+      const lastLine = displayLines[maxLinesToDisplay - 1];
+      // Basic ellipsis addition - might need refinement based on space
+      displayLines[maxLinesToDisplay - 1] =
+        lastLine.length > 3 ? lastLine.slice(0, -3) + "..." : "...";
+    } else {
+      displayLines = allCalculatedLines;
+    }
+    // Handle case where content is empty resulting in zero lines
+    if (displayLines.length === 0 && !item.content) {
+      displayLines.push("<empty>"); // Show placeholder for empty items
+    }
 
-    // Store dimensions on the item object (ensure they are numbers)
+    // 3. Calculate card dimensions based on *displayed* lines
+    const textHeight = displayLines.length * lineHeight;
+    const cardWidth = cardMaxWidth; // Use fixed width for consistency
+    const cardHeight = Math.max(fontSize * 1.5, textHeight) + 2 * padding; // Ensure a minimum height
+
+    // Store dimensions on the item object for hit detection
     item.width = cardWidth;
     item.height = cardHeight;
 
-    // Draw background card
-    ctx.fillStyle = item.color || "#ffffff"; // Use item color or default white
-    ctx.strokeStyle = "#cccccc";
-    ctx.lineWidth = 1 / zoom; // Thin border relative to zoom
-    ctx.fillRect(drawX, drawY, cardWidth, cardHeight);
-    ctx.strokeRect(drawX, drawY, cardWidth, cardHeight);
+    // 4. Draw the styled card (background, border, shadow)
+    ctx.save(); // Save context state before applying shadow/styles
 
-    // Draw text lines
-    ctx.fillStyle = "#333333";
-    lines.forEach((line, index) => {
+    // --- Card Style ---
+    ctx.fillStyle = "#fffefb"; // Warm white background
+    ctx.strokeStyle = "#dcdcdc"; // Soft gray border
+    ctx.lineWidth = 1 / zoom; // Thin border relative to zoom
+    ctx.shadowColor = "rgba(0, 0, 0, 0.1)"; // Subtle shadow
+    ctx.shadowBlur = 5 / zoom; // Blur relative to zoom
+    ctx.shadowOffsetX = 1 / zoom;
+    ctx.shadowOffsetY = 2 / zoom;
+
+    // Draw rounded rectangle path
+    ctx.beginPath();
+    ctx.moveTo(drawX + cornerRadius, drawY);
+    ctx.lineTo(drawX + cardWidth - cornerRadius, drawY);
+    ctx.arcTo(
+      drawX + cardWidth,
+      drawY,
+      drawX + cardWidth,
+      drawY + cornerRadius,
+      cornerRadius
+    );
+    ctx.lineTo(drawX + cardWidth, drawY + cardHeight - cornerRadius);
+    ctx.arcTo(
+      drawX + cardWidth,
+      drawY + cardHeight,
+      drawX + cardWidth - cornerRadius,
+      drawY + cardHeight,
+      cornerRadius
+    );
+    ctx.lineTo(drawX + cornerRadius, drawY + cardHeight);
+    ctx.arcTo(
+      drawX,
+      drawY + cardHeight,
+      drawX,
+      drawY + cardHeight - cornerRadius,
+      cornerRadius
+    );
+    ctx.lineTo(drawX, drawY + cornerRadius);
+    ctx.arcTo(drawX, drawY, drawX + cornerRadius, drawY, cornerRadius);
+    ctx.closePath();
+
+    ctx.fill(); // Fill the path (applying shadow)
+    ctx.shadowColor = "transparent"; // Turn off shadow for border
+    ctx.stroke(); // Stroke the path
+
+    ctx.restore(); // Restore context state (removes shadow settings etc.)
+
+    // 5. Draw the displayed text lines
+    ctx.fillStyle = "#333333"; // Dark text color
+    displayLines.forEach((line, index) => {
       ctx.fillText(line, drawX + padding, drawY + padding + index * lineHeight);
     });
   }
@@ -1085,11 +1163,24 @@ document.addEventListener("DOMContentLoaded", () => {
       !(item.type === "file" && item.content)
     );
     editTagsBtn.classList.remove("hidden"); // Always show tag button for any selected item
+
+    const isTextItem = item.type === "text";
+    copyTextBtn.classList.toggle("hidden", !isTextItem);
+    if (isTextItem) {
+      textToCopy = String(item.content || ""); // Store the full content
+      console.log(
+        `[Client] Stored text content for potential copy (item ${item.id}).`
+      );
+    }
   }
 
   function hideContextMenu() {
     if (!contextMenu.classList.contains("hidden")) {
       contextMenu.classList.add("hidden");
+    }
+    if (textToCopy !== null) {
+      console.log("[Client] Clearing stored text content.");
+      textToCopy = null;
     }
     // Don't deselect item here, selection persists until click elsewhere or ESC etc.
   }
@@ -2131,6 +2222,70 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  copyTextBtn.addEventListener("click", () => {
+    // Check if there is text stored from the context menu action
+    if (textToCopy !== null && myUserID) {
+      console.log(
+        "[Client] Copy button clicked, attempting to copy stored text using document.execCommand."
+      );
+
+      let success = false;
+      const tempTextArea = document.createElement("textarea");
+
+      try {
+        // Style to hide the textarea off-screen
+        tempTextArea.style.position = "fixed";
+        tempTextArea.style.left = "-9999px";
+        tempTextArea.style.top = "-9999px";
+        tempTextArea.value = textToCopy; // Put the stored text into the textarea
+
+        document.body.appendChild(tempTextArea); // Add to DOM
+        tempTextArea.select(); // Select the text
+        tempTextArea.setSelectionRange(0, textToCopy.length); // Ensure full selection for mobile etc.
+
+        // Execute the copy command
+        success = document.execCommand("copy");
+
+        if (success) {
+          console.log(
+            "[Client] Text copied successfully using document.execCommand."
+          );
+          // Visual feedback
+          const originalText = copyTextBtn.textContent;
+          copyTextBtn.textContent = "Copied!";
+          setTimeout(() => {
+            if (copyTextBtn) copyTextBtn.textContent = originalText;
+          }, 1500);
+        } else {
+          console.error(
+            '[Client] document.execCommand("copy") returned false or threw error.'
+          );
+          alert(
+            "Could not copy text using execCommand. Browser might not support it or permission denied."
+          );
+        }
+      } catch (err) {
+        console.error(
+          '[Client] Error during document.execCommand("copy"):',
+          err
+        );
+        alert("An error occurred while trying to copy text.");
+      } finally {
+        // IMPORTANT: Clean up the temporary textarea
+        if (tempTextArea) {
+          document.body.removeChild(tempTextArea);
+        }
+        // Hide the menu AFTER the operation attempt
+        hideContextMenu(); // This will also clear textToCopy
+      }
+    } else {
+      console.warn(
+        "Copy action triggered but no text was stored or user not identified."
+      );
+      hideContextMenu();
+    }
+  });
+
   downloadBtn.addEventListener("click", () => {
     if (selectedItem && selectedItem.type === "file" && selectedItem.content) {
       // Trigger download for file items
@@ -2415,6 +2570,43 @@ document.addEventListener("DOMContentLoaded", () => {
       // cursor: { x: worldMousePos?.x, y: worldMousePos?.y }
     });
   }
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      // Check if the context menu is visible AND the click was NOT inside the menu itself
+      if (
+        !contextMenu.classList.contains("hidden") &&
+        !contextMenu.contains(e.target)
+      ) {
+        // Additionally, check if the click was NOT the initial right-click that opened the menu
+        // (prevents immediate closure if right-click happens near menu boundary).
+        // We can approximate this by checking if the target is part of the canvas or outside.
+        // A click on a menu button is handled by the button's own listener.
+        const clickTargetIsButtonInsideMenu =
+          contextMenu.contains(e.target) && e.target.tagName === "BUTTON";
+
+        if (!clickTargetIsButtonInsideMenu) {
+          console.log(
+            "[Client] Global click detected outside context menu, hiding menu."
+          );
+          hideContextMenu(); // Hide the menu (clears textToCopy)
+
+          // Optional: Deselect item if clicking on canvas background
+          if (
+            selectedItem &&
+            e.target === canvas &&
+            !getItemAtPos(getMousePos(canvas, e)?.x, getMousePos(canvas, e)?.y)
+          ) {
+            selectedItem = null;
+            redrawCanvas();
+          }
+        }
+      }
+    },
+    true
+  ); // Use capture phase to catch clicks reliably
+
   // Send presence periodically even if idle?
   // setInterval(sendPresenceUpdate, 2000); // Send every 2s regardless of activity
 
