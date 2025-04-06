@@ -2447,99 +2447,229 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function handleFiles(fileList, dropWorldX, dropWorldY) {
     if (!fileList || fileList.length === 0 || !myUserID) return;
-    console.log(
-      `Handling ${
-        fileList.length
-      } file(s) dropped/selected at world (${dropWorldX.toFixed(
-        0
-      )}, ${dropWorldY.toFixed(0)})`
-    );
-    loadingIndicator.classList.remove("hidden"); // Show loading indicator
 
-    const uploads = [];
-    const spacingX_world = 50; // Horizontal spacing for multiple files
-    const spacingY_world = 0; // Vertical spacing (can be adjusted)
+    const uploadProgressContainer = document.getElementById('upload-progress-container');
+    if (!uploadProgressContainer) {
+        console.error("Upload progress container element not found!");
+        // Fallback: Show the old generic loading indicator if the new container is missing
+        loadingIndicator.classList.remove("hidden");
+        // Still attempt to process files without detailed progress UI
+    } else {
+        // Make the container visible if it's not already
+        uploadProgressContainer.classList.remove('hidden');
+        uploadProgressContainer.style.display = 'flex'; // Ensure flex display is set
+        // Hide the old generic loading indicator if we are using the new system
+        loadingIndicator.classList.add("hidden");
+    }
 
+    console.log(`Handling ${fileList.length} file(s) at world (${dropWorldX.toFixed(0)}, ${dropWorldY.toFixed(0)})`);
+
+    const spacingX_world = 50; // Horizontal spacing for multiple files in world coordinates
+    const spacingY_world = 0; // Vertical spacing
+
+    // --- Helper Function to Manage Progress UI ---
+    const manageProgressUI = (uploadId, status, value = 0, message = '') => {
+        const element = document.getElementById(uploadId);
+        if (!element) return; // Element might have been removed already
+
+        const progressBar = element.querySelector('.progress-bar');
+        const progressText = element.querySelector('.progress-text');
+        const filenameSpan = element.querySelector('.filename');
+
+        // Reset classes first
+        element.classList.remove('processing', 'completed', 'error', 'fade-out');
+
+        switch (status) {
+            case 'processing':
+                element.classList.add('processing');
+                if (progressBar) {
+                    progressBar.style.width = '100%'; // Indicate activity
+                    progressBar.style.transition = 'none'; // No transition for processing indication
+                }
+                if (progressText) progressText.textContent = 'Processing';
+                break;
+            case 'uploading':
+                if (progressBar) {
+                    progressBar.style.transition = 'width 0.15s linear'; // Restore transition
+                    progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+                }
+                if (progressText) progressText.textContent = `${Math.round(Math.max(0, Math.min(100, value)))}%`;
+                break;
+            case 'completed':
+                element.classList.add('completed');
+                if (progressBar) progressBar.style.width = '100%';
+                if (progressText) progressText.textContent = 'Done';
+                // Add fade-out class, then remove after animation
+                element.classList.add('fade-out');
+                setTimeout(() => {
+                    element.remove();
+                    checkHideProgressContainer(); // Check if container should be hidden
+                }, 600); // Corresponds to CSS transition duration
+                break;
+            case 'error':
+                element.classList.add('error');
+                if (progressBar) progressBar.style.width = '100%'; // Indicate error state
+                if (progressText) progressText.textContent = 'Error';
+                if (filenameSpan) filenameSpan.title = message || 'Upload failed'; // Show error on hover
+                // Add fade-out class, then remove after animation (longer delay for errors)
+                element.classList.add('fade-out');
+                setTimeout(() => {
+                    element.remove();
+                    checkHideProgressContainer(); // Check if container should be hidden
+                }, 5000); // Keep error visible longer
+                break;
+            default: // E.g., 'waiting' or initial state
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = 'Waiting...';
+        }
+    };
+
+    // --- Helper Function to Check if Container Should Be Hidden ---
+    const checkHideProgressContainer = () => {
+        if (uploadProgressContainer && uploadProgressContainer.children.length === 0) {
+            uploadProgressContainer.classList.add('hidden');
+            uploadProgressContainer.style.display = 'none'; // Explicitly hide
+        }
+    };
+
+
+    // --- Process Each File ---
     Array.from(fileList).forEach((file, index) => {
-      // Calculate position for each file, potentially cascading
-      let fileX = dropWorldX + index * spacingX_world;
-      let fileY = dropWorldY + index * spacingY_world;
-      // Apply snapping to initial drop position if enabled
-      if (isSnapEnabled) {
-        fileX = Math.round(fileX / GRID_SIZE) * GRID_SIZE;
-        fileY = Math.round(fileY / GRID_SIZE) * GRID_SIZE;
-      }
+        const uploadId = `upload-${Date.now()}-${index}`; // Simple unique ID for the UI element
 
-      const promise = new Promise(async (resolve, reject) => {
-        try {
-          if (file.type.startsWith("image/")) {
-            // Handle image files by reading as data URL
+        // Calculate item position in world coordinates
+        let fileX = dropWorldX + index * spacingX_world;
+        let fileY = dropWorldY + index * spacingY_world;
+        if (isSnapEnabled) {
+            fileX = Math.round(fileX / GRID_SIZE) * GRID_SIZE;
+            fileY = Math.round(fileY / GRID_SIZE) * GRID_SIZE;
+        }
+
+        // Create the progress UI element only if the container exists
+        if (uploadProgressContainer) {
+            const progressElement = document.createElement('div');
+            progressElement.id = uploadId;
+            progressElement.className = 'upload-progress-item';
+            progressElement.innerHTML = `
+                <span class="filename" title="${file.name}">${file.name}</span>
+                <div class="progress-info">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar"></div>
+                    </div>
+                    <span class="progress-text">0%</span>
+                </div>
+            `;
+            uploadProgressContainer.appendChild(progressElement);
+        } else {
+             // If container doesn't exist, we can't show progress, but still log
+             console.log(`Starting processing for ${file.name} (no UI container)`);
+        }
+
+
+        // --- Handle File Type ---
+        if (file.type.startsWith("image/")) {
+            // Handle image files by reading as data URL (client-side processing)
+            manageProgressUI(uploadId, 'processing');
             const reader = new FileReader();
             reader.onload = (e) => {
-              socket.emit("add-item", {
-                type: "image",
-                content: e.target.result,
-                x: fileX,
-                y: fileY,
-                originalName: file.name,
-              });
-              resolve({ name: file.name, status: "success" });
+                socket.emit("add-item", {
+                    type: "image",
+                    content: e.target.result, // base64 data URL
+                    x: fileX,
+                    y: fileY,
+                    originalName: file.name,
+                    // Note: width/height will be calculated on first draw if needed
+                });
+                 manageProgressUI(uploadId, 'completed'); // Mark as complete
             };
-            reader.onerror = (err) =>
-              reject(new Error(`FileReader error for ${file.name}`));
+            reader.onerror = (err) => {
+                console.error(`FileReader error for ${file.name}:`, err);
+                manageProgressUI(uploadId, 'error', 0, `Could not read image file`);
+            };
             reader.readAsDataURL(file);
-          } else {
-            // Handle other files by uploading to server
+
+        } else {
+            // Handle other files by uploading via XMLHttpRequest for progress
+            manageProgressUI(uploadId, 'uploading', 0); // Set initial state to 0%
+
+            const xhr = new XMLHttpRequest();
             const formData = new FormData();
-            formData.append("file", file);
-            const response = await fetch("/upload", {
-              method: "POST",
-              body: formData,
+            formData.append("file", file); // Field name must match server (multer expects 'file')
+
+            // Progress Handler
+            xhr.upload.addEventListener("progress", (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    manageProgressUI(uploadId, 'uploading', percentComplete);
+                } else {
+                    // Cannot compute progress (e.g., chunked transfer encoding)
+                    // Show indeterminate state? For now, just stays at 0% or last known %.
+                    // manageProgressUI(uploadId, 'uploading', -1); // Could use -1 to indicate indeterminate
+                    console.log(`Upload progress not computable for ${file.name}`);
+                }
             });
 
-            if (!response.ok) {
-              let errorMsg = `Upload failed for ${file.name}: ${response.status}`;
-              try {
-                errorMsg = (await response.json()).error || errorMsg;
-              } catch (_) {}
-              throw new Error(errorMsg);
-            }
-            const result = await response.json();
-            socket.emit("add-item", {
-              type: "file",
-              content: result.path, // Server path
-              x: fileX,
-              y: fileY,
-              originalName: result.originalname,
-              mimetype: result.mimetype,
+            // Completion Handler (Load event fires for both success and error statuses)
+            xhr.addEventListener("load", () => {
+                if (xhr.status >= 200 && xhr.status < 300) { // Success statuses
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        // Check if server actually returned expected data
+                        if (result && result.path && result.originalname) {
+                           socket.emit("add-item", {
+                                type: "file",
+                                content: result.path, // Server path (e.g., /uploads/uuid.ext)
+                                x: fileX,
+                                y: fileY,
+                                originalName: result.originalname,
+                                mimetype: result.mimetype,
+                           });
+                           manageProgressUI(uploadId, 'completed');
+                        } else {
+                             console.error(`Invalid success response for ${file.name}:`, xhr.responseText);
+                             manageProgressUI(uploadId, 'error', 0, 'Invalid server response');
+                        }
+                    } catch (parseError) {
+                        console.error(`Error parsing upload response for ${file.name}:`, parseError, xhr.responseText);
+                        manageProgressUI(uploadId, 'error', 0, 'Server response error');
+                    }
+                } else {
+                    // Handle HTTP error status (4xx, 5xx)
+                    let errorMsg = `Upload failed (${xhr.status})`;
+                    try {
+                        // Try to parse error message from server JSON response
+                        const errorJson = JSON.parse(xhr.responseText);
+                        errorMsg = errorJson.error || errorMsg;
+                    } catch (_) { /* Ignore parsing error if response is not JSON */ }
+                    console.error(`Upload failed for ${file.name}: ${xhr.status} ${xhr.statusText}`, xhr.responseText);
+                    manageProgressUI(uploadId, 'error', 0, errorMsg);
+                }
             });
-            resolve({ name: file.name, status: "success" });
-          }
-        } catch (error) {
-          console.error(`Error handling file ${file.name}:`, error);
-          reject({ name: file.name, status: "error", message: error.message });
+
+            // Network Error Handler
+            xhr.addEventListener("error", () => {
+                console.error(`Network error during upload for ${file.name}`);
+                manageProgressUI(uploadId, 'error', 0, 'Network error');
+            });
+
+            // Abort Handler (Optional - if you add a cancel button)
+            xhr.addEventListener("abort", () => {
+                console.log(`Upload aborted for ${file.name}`);
+                manageProgressUI(uploadId, 'error', 0, 'Aborted'); // Or just remove silently
+            });
+
+            // Send the request
+            xhr.open("POST", "/upload", true); // POST to the '/upload' endpoint
+            // Set headers if needed (e.g., authentication)
+            // xhr.setRequestHeader('Authorization', 'Bearer YOUR_TOKEN');
+            xhr.send(formData);
         }
-      });
-      uploads.push(promise);
     });
 
-    // Wait for all uploads/reads to settle
-    Promise.allSettled(uploads).then((results) => {
-      loadingIndicator.classList.add("hidden"); // Hide loading indicator
-      const failedCount = results.filter((r) => r.status === "rejected").length;
-      if (failedCount > 0) {
-        const failedFiles = results
-          .filter((r) => r.status === "rejected")
-          .map((r) => r.reason?.name || "unknown file");
-        alert(
-          `${failedCount} file(s) could not be added: ${failedFiles.join(
-            ", "
-          )}. See console for details.`
-        );
-      }
-      console.log("File handling process completed.");
-    });
-  }
+    // Initial check in case no files were processed (e.g., empty fileList)
+    checkHideProgressContainer();
+}
+
 
   // --- Presence Update Sending (Throttled) ---
   let lastPresenceUpdateTime = 0;
