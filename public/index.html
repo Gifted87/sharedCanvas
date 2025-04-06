@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Shared Canvas</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+    <!-- Link to the stylesheet -->
+  </head>
+  <body>
+    <!-- Toolbar at the top -->
+    <div id="toolbar">
+      <button id="qr-toggle-btn" title="Show/Hide QR Code">🖨️</button>
+      <button id="clear-canvas-btn" title="Clear Canvas">🗑️</button>
+      <!-- <button id="settings-btn" title="Settings">⚙️</button> -->
+      <!-- Settings button (future feature) -->
+      <button id="upload-btn" title="Upload File">📁</button>
+      <button id="paste-btn" title="Paste Text">📝</button> <!-- Changed title -->
+      <!-- Removed mobile/explicit paste button, replaced by dialog -->
+      <span id="user-count" title="Connected Users">Users: ?</span>
+    </div>
+
+    <!-- Container for the QR Code (initially hidden) -->
+    <div id="qr-container" class="hidden">
+      <img id="qr-code-img" src="" alt="QR Code Loading..." />
+      <p>Scan or visit: <span id="server-url"></span></p>
+      <button id="qr-close-btn" title="Close QR Code">X</button>
+    </div>
+
+    <!-- The main canvas area -->
+    <!-- Added tabindex="0" to allow focus for paste events (still useful for Ctrl+V image pasting) -->
+    <canvas id="canvas" tabindex="0"></canvas>
+
+    <!-- Hidden file input used by the upload button -->
+    <input type="file" id="file-input" hidden multiple />
+
+    <!-- Loading indicator shown during file uploads -->
+    <div id="loading-indicator" class="hidden">Uploading...</div>
+
+    <!-- Context menu for item actions (e.g., delete), initially hidden -->
+    <div id="context-menu" class="hidden">
+      <button id="delete-btn">Delete Item</button>
+      <button id="download-btn" class="hidden">Download File</button>
+      <!-- Added for file download -->
+    </div>
+
+    <!-- Paste Text Dialog (initially hidden) -->
+    <div id="paste-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3>Paste Text</h3>
+        <textarea id="paste-textarea" rows="6" placeholder="Paste your text here..."></textarea>
+        <div class="modal-buttons">
+           <button id="paste-dialog-add-btn">Add to Canvas</button>
+           <button id="paste-dialog-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Load Socket.IO client library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Load your custom client-side JavaScript -->
+    <script src="client.js"></script>
+  </body>
+</html>
