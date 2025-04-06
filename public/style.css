@@ -1,3 +1,4 @@
+
 /* public/style.css */
 /* Basic Reset */
 * {
@@ -20,42 +21,76 @@ body {
   flex-direction: column; /* Arrange toolbar above canvas */
 }
 
-/* Toolbar Styling */
+/* --- Toolbar Styling --- */
 #toolbar {
   display: flex;
+  justify-content: space-between; /* Space out main sections */
+  align-items: center; /* Align items vertically */
   padding: 8px 10px;
   background-color: #e0e0e0; /* Slightly darker gray */
   border-bottom: 1px solid #cccccc;
-  flex-wrap: wrap; /* Allow buttons to wrap on small screens */
-  gap: 8px; /* Space between toolbar items */
+  flex-wrap: wrap; /* Allow items to wrap on small screens */
+  gap: 15px; /* Increased gap between major sections */
   flex-shrink: 0; /* Prevent toolbar from shrinking */
 }
 
-#toolbar button {
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Space between items within a section */
+}
+
+/* Give center section flexibility */
+.search-filter-section {
+  flex-grow: 1;
+  justify-content: center; /* Center search bar etc. */
+  min-width: 200px; /* Prevent excessive shrinking */
+}
+
+/* Push info section to the right */
+.info-settings-section {
+  margin-left: auto; /* Pushes itself right */
+}
+
+#toolbar button,
+#toolbar select {
   padding: 5px 10px;
-  font-size: 1.1em; /* Slightly larger icons/text */
+  font-size: 1.0em; /* Adjusted base size */
   cursor: pointer;
   border: 1px solid #b0b0b0;
   border-radius: 4px;
   background-color: #f9f9f9;
+  white-space: nowrap; /* Prevent button text wrapping */
 }
-#toolbar button:hover {
+#toolbar button:hover,
+#toolbar select:hover {
   background-color: #f0f0f0;
   border-color: #a0a0a0;
 }
 #toolbar button:active {
   background-color: #e5e5e5;
 }
+#toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#toolbar input[type="search"] {
+  padding: 5px 8px;
+  border: 1px solid #b0b0b0;
+  border-radius: 4px;
+  min-width: 150px;
+  font-size: 0.95em;
+}
 
 #toolbar span#user-count {
-  margin-left: auto; /* Push user count to the right */
-  padding: 8px 12px;
+  padding: 5px 12px; /* Match button padding */
   align-self: center;
   font-size: 0.9em;
   color: #333;
 }
 
-/* QR Code Container Styling */
+/* --- QR Code Container Styling (No change needed) --- */
 #qr-container {
   position: fixed; /* Position relative to viewport */
   top: 60px; /* Below toolbar */
@@ -69,78 +104,65 @@ body {
   text-align: center;
   max-width: 250px; /* Limit width */
 }
+#qr-container img { /* No change */ }
+#qr-container p { /* No change */ }
+#qr-container button#qr-close-btn { /* No change */ }
 
-#qr-container img {
-  display: block;
-  width: 100%; /* Make image fill container width */
-  max-width: 200px; /* Max size of QR */
-  height: auto;
-  margin: 0 auto 15px auto; /* Center image and add bottom margin */
-  border: 1px solid #eee;
-}
-#qr-container p {
-  font-size: 0.9em;
-  color: #555;
-  word-wrap: break-word; /* Wrap long URLs */
-}
-#qr-container button#qr-close-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  background: none;
-  border: none;
-  font-size: 1.2em;
-  cursor: pointer;
-  color: #888;
-  padding: 2px 5px;
-}
-#qr-container button#qr-close-btn:hover {
-  color: #333;
-}
-
-/* Canvas Styling */
+/* --- Canvas Styling (No change needed) --- */
 #canvas {
-  /* border: 1px solid #cccccc; */ /* Optional border */
-  cursor: crosshair; /* Default cursor, will change during pan/drag */
-  flex-grow: 1; /* Canvas takes up remaining vertical space */
-  display: block; /* Remove potential extra space below canvas */
-  width: 100%; /* Fill horizontal space */
-  /* Height is determined by flex-grow */
-  background-color: #e9e9e9; /* Slightly off-white background like a whiteboard */
-  overflow: hidden; /* Just in case */
-  touch-action: none; /* Disable browser default touch actions like scroll/zoom on the canvas */
+  cursor: crosshair;
+  flex-grow: 1;
+  display: block;
+  width: 100%;
+  background-color: #e9e9e9;
+  overflow: hidden;
+  touch-action: none;
 }
 
-/* Loading Indicator Styling */
+/* --- Minimap Canvas Styling --- */
+#minimap-canvas {
+    position: fixed;
+    bottom: 15px;
+    right: 15px;
+    width: 150px; /* Example size */
+    height: 100px; /* Example size */
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+    border: 1px solid #999;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    z-index: 90; /* Below modals/context menu but above main canvas */
+    cursor: pointer;
+}
+
+/* --- Loading Indicator Styling (No change needed) --- */
 #loading-indicator {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.8); /* Darker background */
+  background-color: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 12px 25px;
-  border-radius: 20px; /* Pill shape */
-  z-index: 101; /* Above QR code */
+  border-radius: 20px;
+  z-index: 101;
   font-size: 0.9em;
   box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-/* Context Menu Styling */
+/* --- Context Menu Styling --- */
 #context-menu {
-  position: absolute; /* Positioned by JavaScript */
+  position: absolute;
   background-color: white;
   border: 1px solid #ccc;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.15);
-  z-index: 1000; /* Above everything else */
-  padding: 5px 0; /* Vertical padding */
+  z-index: 1000;
+  padding: 5px 0;
   border-radius: 4px;
-  min-width: 120px; /* Minimum width */
+  min-width: 150px; /* Slightly wider for new option */
 }
 #context-menu button {
   display: block;
   width: 100%;
-  padding: 8px 15px; /* More padding */
+  padding: 8px 15px;
   border: none;
   background: none;
   text-align: left;
@@ -149,64 +171,92 @@ body {
   color: #333;
 }
 #context-menu button:hover {
-  background-color: #f0f0f0; /* Highlight on hover */
+  background-color: #f0f0f0;
 }
 
-/* Modal Dialog Styling (for Paste) */
+/* --- Modal Dialog Styling (General) --- */
 .modal {
   position: fixed;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-  display: flex;
+  background-color: rgba(0, 0, 0, 0.6); /* Slightly darker backdrop */
+  display: flex; /* Use flex to center content */
   justify-content: center;
   align-items: center;
-  z-index: 1050; /* Above other elements */
+  z-index: 1050; /* High z-index */
 }
 
 .modal-content {
   background-color: white;
-  padding: 25px;
+  padding: 25px 30px; /* More padding */
   border-radius: 8px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   min-width: 300px;
   max-width: 500px;
-  width: 80%;
+  width: 90%; /* Responsive width */
+  text-align: center; /* Center text by default */
 }
 
 .modal-content h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 20px; /* More space below heading */
   font-weight: 500;
   color: #333;
 }
 
+.modal-content input[type="text"],
+.modal-content input[type="search"], /* Style search in modals if needed */
 .modal-content textarea {
-  width: 100%;
+  width: 100%; /* Full width */
   margin-bottom: 15px;
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-family: inherit;
   font-size: 1em;
-  resize: vertical; /* Allow vertical resize */
+}
+
+.modal-content textarea {
+  resize: vertical;
+  min-height: 80px; /* Minimum height for text areas */
+  text-align: left; /* Align text left */
 }
 
 .modal-buttons {
   display: flex;
   justify-content: flex-end; /* Align buttons to the right */
   gap: 10px; /* Space between buttons */
+  margin-top: 20px; /* Space above buttons */
 }
 
 .modal-buttons button {
-  padding: 8px 16px;
+  padding: 9px 18px; /* Slightly larger buttons */
   border-radius: 4px;
   cursor: pointer;
   border: 1px solid #ccc;
+  font-weight: 500;
 }
 
+/* Specific Modal Styles */
+
+/* Nickname Modal */
+#nickname-dialog {
+  /* No additional style needed if it uses .modal */
+}
+.nickname-modal-content button {
+    width: 100%; /* Make button full width */
+    margin-top: 10px; /* Space above button */
+    background-color: #007bff; /* Primary color */
+    color: white;
+    border-color: #007bff;
+}
+.nickname-modal-content button:hover {
+    background-color: #0056b3;
+}
+
+/* Paste Dialog Buttons */
 #paste-dialog-add-btn {
   background-color: #007bff;
   color: white;
@@ -224,7 +274,49 @@ body {
   background-color: #e2e6ea;
 }
 
-/* Utility Class */
+/* Tag Editor Dialog Placeholders */
+#tag-editor-dialog .modal-content {
+    text-align: left; /* Align content left */
+}
+#current-tags-container {
+    margin-bottom: 15px;
+    min-height: 40px; /* Space for tags */
+    /* Add styles for tag pills later */
+}
+#new-tag-input {
+    /* Uses general modal input style */
+}
+#add-tag-btn {
+    /* Style like other modal buttons or inline */
+    padding: 5px 10px;
+    margin-left: 5px;
+}
+#tag-editor-done-btn {
+    background-color: #28a745; /* Green for done/save */
+    color: white;
+    border-color: #28a745;
+}
+#tag-editor-done-btn:hover {
+    background-color: #218838;
+}
+
+/* --- Utility Classes --- */
 .hidden {
   display: none !important; /* Force hide */
+}
+
+.error-message {
+    color: #dc3545; /* Red color for errors */
+    font-size: 0.9em;
+    margin-top: 10px;
+    min-height: 1.2em; /* Prevent layout shift */
+}
+
+/* --- Highlighting (Placeholder) --- */
+/* We'll likely apply highlights dynamically via JS (e.g., inline styles or adding/removing a class) */
+.highlighted-item {
+    /* Example: applied to a temporary element drawn over the item */
+    /* Or modify drawing logic in JS based on highlight state */
+    outline: 3px solid rgba(0, 123, 255, 0.8);
+    outline-offset: 2px;
 }

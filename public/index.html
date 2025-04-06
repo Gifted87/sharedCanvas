@@ -1,23 +1,82 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Shared Canvas</title>
+    <title>Collaborative Canvas</title>
+    <!-- Updated Title -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css" />
     <!-- Link to the stylesheet -->
   </head>
   <body>
+    <!-- Nickname Modal (Initially Hidden, covers everything) -->
+    <div id="nickname-dialog" class="modal">
+      <!-- Initially visible until hidden by JS -->
+      <div class="modal-content nickname-modal-content">
+        <!-- Added specific class -->
+        <h3>Welcome! Please enter your nickname:</h3>
+        <input
+          type="text"
+          id="nickname-input"
+          placeholder="Your Name"
+          autofocus
+          autocomplete="off"
+        />
+        <button id="nickname-submit-btn">Join Canvas</button>
+        <p id="nickname-error" class="error-message hidden"></p>
+        <!-- For potential errors -->
+      </div>
+    </div>
+
     <!-- Toolbar at the top -->
     <div id="toolbar">
-      <button id="qr-toggle-btn" title="Show/Hide QR Code">🖨️</button>
-      <button id="clear-canvas-btn" title="Clear Canvas">🗑️</button>
-      <!-- <button id="settings-btn" title="Settings">⚙️</button> -->
-      <!-- Settings button (future feature) -->
+      <!-- Left Side: Actions -->
       <button id="upload-btn" title="Upload File">📁</button>
-      <button id="paste-btn" title="Paste Text">📝</button> <!-- Changed title -->
-      <!-- Removed mobile/explicit paste button, replaced by dialog -->
-      <span id="user-count" title="Connected Users">Users: ?</span>
+      <input type="file" id="file-input" hidden multiple />
+      <!-- Moved input near button -->
+      <button id="paste-btn" title="Paste Text">📝</button>
+      <button id="clear-canvas-btn" title="Clear Canvas">🗑️</button>
+
+      <!-- Center: Search & Filter -->
+      <div class="toolbar-section search-filter-section">
+        <input
+          type="search"
+          id="search-input"
+          placeholder="Search filename/tags..."
+        />
+        <!-- Basic filter placeholders - could be buttons opening a panel -->
+        <button id="filter-type-btn" title="Filter by Type">Type</button>
+        <button id="filter-date-btn" title="Filter by Date">Date</button>
+        <button id="filter-tag-btn" title="Filter by Tag">Tag</button>
+        <!-- Add more complex filter UI later -->
+      </div>
+
+      <!-- Right Side: Navigation & View -->
+      <div class="toolbar-section view-nav-section">
+        <button id="zoom-in-btn" title="Zoom In">+</button>
+        <button id="zoom-out-btn" title="Zoom Out">-</button>
+        <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
+        <button id="history-back-btn" title="Navigate Back" disabled>←</button>
+        <button id="history-forward-btn" title="Navigate Forward" disabled>
+          →
+        </button>
+        <button id="save-view-btn" title="Save Current View">
+          💾 Bookmark
+        </button>
+        <!-- Bookmark list placeholder -->
+        <select id="bookmarks-list" title="Go to Bookmark">
+          <option value="">Go to...</option>
+          <!-- Bookmarks added dynamically by JS -->
+        </select>
+        <button id="grid-snap-toggle" title="Toggle Grid Snap">Grid</button>
+      </div>
+
+      <!-- Far Right: Info & Settings -->
+      <div class="toolbar-section info-settings-section">
+        <button id="qr-toggle-btn" title="Show/Hide QR Code">🖨️</button>
+        <span id="user-count" title="Connected Users">Users: ?</span>
+        <!-- <button id="settings-btn" title="Settings">⚙️</button> -->
+      </div>
     </div>
 
     <!-- Container for the QR Code (initially hidden) -->
@@ -28,11 +87,11 @@
     </div>
 
     <!-- The main canvas area -->
-    <!-- Added tabindex="0" to allow focus for paste events (still useful for Ctrl+V image pasting) -->
     <canvas id="canvas" tabindex="0"></canvas>
+    <!-- tabindex important for focus/paste -->
 
-    <!-- Hidden file input used by the upload button -->
-    <input type="file" id="file-input" hidden multiple />
+    <!-- Minimap Canvas (Positioned via CSS) -->
+    <canvas id="minimap-canvas"></canvas>
 
     <!-- Loading indicator shown during file uploads -->
     <div id="loading-indicator" class="hidden">Uploading...</div>
@@ -41,17 +100,36 @@
     <div id="context-menu" class="hidden">
       <button id="delete-btn">Delete Item</button>
       <button id="download-btn" class="hidden">Download File</button>
-      <!-- Added for file download -->
+      <!-- Placeholder for Tag editing action -->
+      <button id="edit-tags-btn">Edit Tags</button>
     </div>
 
     <!-- Paste Text Dialog (initially hidden) -->
     <div id="paste-dialog" class="modal hidden">
       <div class="modal-content">
         <h3>Paste Text</h3>
-        <textarea id="paste-textarea" rows="6" placeholder="Paste your text here..."></textarea>
+        <textarea
+          id="paste-textarea"
+          rows="6"
+          placeholder="Paste your text here..."
+        ></textarea>
         <div class="modal-buttons">
-           <button id="paste-dialog-add-btn">Add to Canvas</button>
-           <button id="paste-dialog-cancel-btn">Cancel</button>
+          <button id="paste-dialog-add-btn">Add to Canvas</button>
+          <button id="paste-dialog-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tag Editor Modal (placeholder - initially hidden) -->
+    <div id="tag-editor-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3 id="tag-editor-title">Edit Tags for Item</h3>
+        <!-- Tag display and input elements go here -->
+        <div id="current-tags-container"></div>
+        <input type="text" id="new-tag-input" placeholder="Add a tag..." />
+        <button id="add-tag-btn">Add Tag</button>
+        <div class="modal-buttons">
+          <button id="tag-editor-done-btn">Done</button>
         </div>
       </div>
     </div>
