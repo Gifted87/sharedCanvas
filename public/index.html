@@ -140,6 +140,19 @@
       <!-- Progress items will be added here dynamically by client.js -->
     </div>
 
+    <!-- Bookmark Save Dialog (initially hidden) -->
+    <div id="bookmark-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3>Save Current View</h3>
+        <input type="text" id="bookmark-name-input" placeholder="Enter bookmark name" autocomplete="off" />
+        <p id="bookmark-error" class="error-message hidden"></p> <!-- Error message area -->
+        <div class="modal-buttons">
+          <button id="bookmark-save-btn">Save Bookmark</button>
+          <button id="bookmark-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     
 
     <!-- Load Socket.IO client library -->

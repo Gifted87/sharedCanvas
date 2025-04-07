@@ -78,6 +78,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const toolbarToggleBtn = document.getElementById("toolbar-toggle-btn");
   const toggleIcon = toolbarToggleBtn.querySelector(".icon"); // Get the icon span
 
+  const bookmarkDialog = document.getElementById('bookmark-dialog');
+  const bookmarkNameInput = document.getElementById('bookmark-name-input');
+  const bookmarkSaveBtn = document.getElementById('bookmark-save-btn');
+  const bookmarkCancelBtn = document.getElementById('bookmark-cancel-btn');
+  const bookmarkError = document.getElementById('bookmark-error');
+
   // --- State ---
   let items = []; // Local cache of canvas items
   let myUserID = null; // Assigned by server after nickname
@@ -1656,10 +1662,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+
   // Toolbar Buttons
   qrToggleBtn.addEventListener("click", () => {
+    console.log("share button clicked")
     qrContainer.classList.toggle("hidden");
-    if (!qrContainer.classList.contains("hidden") && !qrCodeImg.src) {
+    if (true) {
+      console.log("fetch block entered")
       // Fetch QR code if opening and not already loaded
       fetch("/qrcode")
         .then((res) =>
@@ -1670,8 +1679,11 @@ document.addEventListener("DOMContentLoaded", () => {
             qrCodeImg.src = data.qrDataUrl;
             serverUrlSpan.textContent = ` ${data.serverUrl}`;
             qrCodeImg.alt = `QR Code for ${data.serverUrl}`;
+            console.log("qr code loaded:", data.qrDataUrl);
           } else {
+            console.log("share button clicked")
             throw new Error("Invalid QR data received");
+
           }
         })
         .catch((err) => {
@@ -1779,14 +1791,44 @@ document.addEventListener("DOMContentLoaded", () => {
   historyBackBtn.addEventListener("click", () => navigateHistory("back"));
   historyForwardBtn.addEventListener("click", () => navigateHistory("forward"));
 
-  saveViewBtn.addEventListener("click", () => {
+  saveViewBtn.addEventListener('click', () => {
+    if (!myUserID) return; // Must be identified
+    bookmarkNameInput.value = ''; // Clear previous input
+    bookmarkError.classList.add('hidden'); // Hide previous error
+    bookmarkDialog.classList.remove('hidden'); // Show the modal
+    bookmarkNameInput.focus(); // Focus the input field
+  });
+
+  bookmarkSaveBtn.addEventListener('click', () => {
     if (!myUserID) return;
-    const name = prompt("Enter a name for this bookmark:");
-    if (name && name.trim().length > 0) {
-      socket.emit("save-bookmark", {
-        name: name.trim().substring(0, 50), // Limit name length
-        view: { x: offsetX, y: offsetY, zoom: zoom }, // Send SCREEN coordinates (offset) + zoom
+    const name = bookmarkNameInput.value.trim();
+    bookmarkError.classList.add('hidden'); // Hide error initially
+
+    // Basic validation (e.g., non-empty and max length)
+    if (name && name.length > 0 && name.length <= 50) {
+      console.log(`Saving bookmark: "${name}"`);
+      socket.emit('save-bookmark', {
+        name: name, // Use the validated name from input
+        view: { x: offsetX, y: offsetY, zoom: zoom }, // Current view state
       });
+      bookmarkDialog.classList.add('hidden'); // Hide dialog on success
+    } else {
+      // Show error message inside the dialog
+      bookmarkError.textContent = 'Bookmark name must be 1-50 characters.';
+      bookmarkError.classList.remove('hidden');
+    }
+  });
+
+  bookmarkCancelBtn.addEventListener('click', () => {
+    bookmarkDialog.classList.add('hidden'); // Just hide the dialog
+    bookmarkError.classList.add('hidden'); // Also clear error on cancel
+  });
+
+  // Optional: Add Enter key listener for the bookmark name input
+  bookmarkNameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent potential form submission
+      bookmarkSaveBtn.click(); // Trigger the save button click
     }
   });
 
