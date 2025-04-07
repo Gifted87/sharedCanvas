@@ -165,6 +165,62 @@ const startServer = () => {
         io.emit("user-count", connectedUsersMap.size);
     });
 
+    socket.on('re-identify', (data) => {
+        if (!data || !data.storedUserID || !data.storedNickname) {
+            console.warn(`Invalid re-identify attempt from socket ${socket.id}. Forcing new join.`);
+            // Optionally tell client to start fresh
+            // socket.emit('force-refresh', { message: "Re-identification failed. Please rejoin." });
+            // Or just let the client timeout and show nickname dialog again
+            return;
+        }
+
+        const { storedUserID, storedNickname } = data;
+        console.log(`Re-identify attempt: Nick=[${storedNickname}], ID=[${storedUserID}], New Socket=[${socket.id}]`);
+
+        // --- Verification ---
+        // 1. Check if another ACTIVE socket is already using this userID
+        let alreadyActive = false;
+        for (const [sid, uData] of connectedUsersMap.entries()) {
+            if (uData.userID === storedUserID && sid !== socket.id) {
+                alreadyActive = true;
+                console.warn(`User ID ${storedUserID} (${storedNickname}) is already active with socket ${sid}. Rejecting re-identify for ${socket.id}.`);
+                // Optionally disconnect the new socket or force refresh
+                socket.disconnect(true); // Disconnect the new socket trying to impersonate
+                return;
+            }
+        }
+
+        // 2. (Optional) More robust verification: Check against bookmarks or other data if needed.
+        //    For now, we trust the client if the userID isn't actively used by another socket.
+
+        // --- Success ---
+        console.log(`Re-identifying socket ${socket.id} as User ${storedNickname} (${storedUserID})`);
+        socket.userID = storedUserID;
+        socket.nickname = storedNickname;
+        connectedUsersMap.set(socket.id, { userID: storedUserID, nickname: storedNickname });
+
+        // Send state back to the reconnected client (using 'init' is simplest)
+        socket.emit("init", {
+            items: canvasItems,
+            users: getAllUsers(),
+            bookmarks: userBookmarks.filter(b => b.ownerUserID === storedUserID), // Send correct bookmarks
+            presence: getAllPresence()
+        });
+
+        // Inform others the user is back (use 'user-updated')
+        // No need to broadcast if they were already marked as present recently,
+        // but safer to always send update to ensure consistency.
+        socket.broadcast.emit("user-updated", { userID: storedUserID, nickname: storedNickname });
+
+        // Update user count (might not change if they reconnected quickly, but good practice)
+        io.emit("user-count", connectedUsersMap.size);
+
+        // Update presence map for this user
+        // (Client should send an 'update-presence' soon anyway)
+        // userPresenceMap.set(storedUserID, { data: {}, timestamp: Date.now() }); // Optionally reset presence here
+    });
+
+
     // Item Handling
     socket.on("add-item", (itemData) => {
       // Ensure user has set nickname/userID before adding items
@@ -398,7 +454,7 @@ const startServer = () => {
     });
 
     // Cleanup on Disconnect
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
       const userData = connectedUsersMap.get(socket.id);
       if (userData) {
           console.log(`User disconnected: ${userData.nickname} (${userData.userID}) - Socket: ${socket.id}`);
@@ -409,7 +465,7 @@ const startServer = () => {
           // Update user count
           io.emit("user-count", connectedUsersMap.size);
       } else {
-          console.log(`Socket disconnected before setting nickname: ${socket.id}`);
+        console.log(`Socket disconnected before identification: ${socket.id}. Reason: ${reason}`);
       }
     });
   });

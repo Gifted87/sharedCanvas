@@ -5,6 +5,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const socket = io({
     // Prevent automatic connection initially until nickname is potentially set
     // autoConnect: false // Connect immediately, but gate interaction based on myUserID
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
   });
 
   // --- DOM Elements ---
@@ -35,6 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const filterDateBtn = document.getElementById("filter-date-btn");
   const filterTagBtn = document.getElementById("filter-tag-btn");
 
+  const reconnectingIndicator = document.getElementById(
+    "reconnecting-indicator"
+  ); // Add this
   const zoomInBtn = document.getElementById("zoom-in-btn");
   const zoomOutBtn = document.getElementById("zoom-out-btn");
   const zoomFitBtn = document.getElementById("zoom-fit-btn");
@@ -68,6 +74,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const tagEditorDoneBtn = document.getElementById("tag-editor-done-btn");
   let currentItemForTagEditing = null;
 
+  const toolbar = document.getElementById("toolbar"); // The main container
+  const toolbarToggleBtn = document.getElementById("toolbar-toggle-btn");
+  const toggleIcon = toolbarToggleBtn.querySelector(".icon"); // Get the icon span
+
   // --- State ---
   let items = []; // Local cache of canvas items
   let myUserID = null; // Assigned by server after nickname
@@ -75,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let userMap = {}; // Map: { userID: nickname } - All connected users
   let otherUsersPresence = {}; // Map: { userID: { data: {...}, timestamp: number } } - Presence data
   let bookmarks = []; // User's saved view bookmarks
+  let isAttemptingReconnect = false; // Flag to track reconnect state
 
   let selectedItem = null; // The currently selected item object
   let draggedItem = null; // The item currently being dragged
@@ -168,6 +179,20 @@ document.addEventListener("DOMContentLoaded", () => {
       x: worldX * zoom + offsetX,
       y: worldY * zoom + offsetY,
     };
+  }
+
+  if (toolbar) { // Check if toolbar element exists
+    toolbar.addEventListener('transitionend', (event) => {
+      // Only trigger resize when the height-related transition finishes.
+      // This prevents triggering resize for opacity or other unrelated transitions.
+      // 'max-height' is the property used in the CSS for the collapse animation.
+      if (event.propertyName === 'max-height') {
+        console.log('Toolbar transition ended, resizing canvas due to height change.');
+        resizeCanvas(); // Call the existing resize function to adjust canvas size and redraw
+      }
+    });
+  } else {
+    console.error("Toolbar element (#toolbar) not found for transitionend listener.");
   }
 
   // --- Drawing Logic ---
@@ -820,49 +845,112 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Socket Event Handlers ---
   socket.on("connect", () => {
     console.log("Connected to server:", socket.id);
-    // Nickname modal should be visible by default, wait for user input
-    nicknameInput.focus();
-    // Don't reset state here, happens on disconnect/reconnect logic potentially
+    isAttemptingReconnect = false; // Successfully connected/reconnected
+    hideReconnectingIndicator(); // Hide indicator on successful connection/reconnection
+
+    // Check if this is a RECONNECT event after a prior connection
+    if (myUserID && myNickname) {
+      console.log(
+        `Reconnected as ${myNickname} (${myUserID}). Re-identifying...`
+      );
+      // Send existing credentials to the server to re-associate the new socket.id
+      socket.emit("re-identify", {
+        storedUserID: myUserID,
+        storedNickname: myNickname,
+      });
+      // The server should respond (e.g., with 'init' or 'reconnect-success')
+      // to confirm and provide potentially updated state.
+    } else {
+      console.log("Initial connection or state lost. Waiting for nickname.");
+      // This is the first connection, or state was lost (e.g., browser refresh)
+      // Ensure nickname dialog is visible if needed (it should be by default)
+      nicknameDialog.classList.remove("hidden");
+      nicknameInput.focus();
+    }
   });
 
   socket.on("disconnect", (reason) => {
     console.warn("Disconnected from server:", reason);
-    updateUserCount("?");
-    // Reset client state fully on disconnect
-    myUserID = null;
-    myNickname = null;
-    userMap = {};
-    items = [];
-    otherUsersPresence = {};
-    bookmarks = [];
-    selectedItem = null;
-    draggedItem = null;
-    highlightedItemIDs.clear();
-    historyBackStack = [];
-    historyForwardStack = [];
-    updateHistoryButtons();
-    updateBookmarksList();
-    // Clear canvases
-    const dpr = window.devicePixelRatio || 1;
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    minimapCtx.clearRect(
-      0,
-      0,
-      minimapCanvas.width / dpr,
-      minimapCanvas.height / dpr
-    );
-    // Show nickname dialog again to force re-authentication on reconnect
-    nicknameDialog.classList.remove("hidden");
-    nicknameError.textContent =
-      "Disconnected. Please re-enter nickname to rejoin.";
-    nicknameError.classList.remove("hidden");
+    if (reason === "io server disconnect") {
+      // The server deliberately disconnected the socket. Reconnection likely won't work.
+      console.error(
+        "Server disconnected socket. Manual intervention likely required."
+      );
+      showReconnectingIndicator("Server connection closed. Please refresh.");
+      // Optionally, force reset and show nickname dialog here
+      resetClientState(); // You would need to create this function
+      // nicknameDialog.classList.remove("hidden");
+    } else {
+      // Other reasons (transport close, transport error, ping timeout)
+      // Socket.IO will attempt to reconnect automatically.
+      // Show a visual indicator.
+      showReconnectingIndicator(
+        `Connection lost: ${reason}. Attempting to reconnect...`
+      );
+      isAttemptingReconnect = true;
+    }
+    updateUserCount("?"); // Indicate uncertain user count
+    // Maybe disable UI elements here?
+    document.body.classList.add("disconnected");
   });
+
+  socket.io.on("reconnect_attempt", (attemptNumber) => {
+    console.log(`Reconnection attempt ${attemptNumber}...`);
+    isAttemptingReconnect = true;
+    showReconnectingIndicator(
+      `Connection lost. Reconnecting (attempt ${attemptNumber})...`
+    );
+    document.body.classList.add("disconnected"); // Ensure UI stays disabled
+  });
+
+  socket.io.on("reconnect", (attemptNumber) => {
+    // This event fires just before the 'connect' event on successful reconnection.
+    console.log(`Successfully reconnected after ${attemptNumber} attempts.`);
+    // The 'connect' handler will take care of re-identifying and hiding the indicator.
+    isAttemptingReconnect = false; // Mark as no longer attempting
+    // UI will be re-enabled in 'init' or 'reconnect-success' handler
+  });
+
+  socket.io.on("reconnect_error", (error) => {
+    console.error("Reconnection attempt failed:", error);
+    isAttemptingReconnect = true; // Still trying if attempts remain
+    showReconnectingIndicator(
+      `Reconnection failed: ${error.message}. Retrying...`
+    );
+    document.body.classList.add("disconnected");
+  });
+
+  socket.io.on("reconnect_failed", () => {
+    console.error("Failed to reconnect after maximum attempts.");
+    isAttemptingReconnect = false;
+    showReconnectingIndicator(
+      "Could not reconnect to the server. Please refresh the page."
+    );
+    // Keep UI disabled? Or prompt user?
+    document.body.classList.add("disconnected"); // Keep UI disabled
+    // At this point, you might want to fully reset state and force nickname dialog
+    resetClientState(); // You would need to create this function
+    // nicknameDialog.classList.remove("hidden");
+  });
+
   socket.on("connect_error", (err) => {
     console.error("Connection Error:", err);
-    // Optionally show error to user
-    nicknameError.textContent = `Connection failed: ${err.message}.`;
-    nicknameError.classList.remove("hidden");
-    nicknameDialog.classList.remove("hidden"); // Ensure dialog is visible
+    // This often happens during initial connection attempts
+    // If already connected and this happens, it might trigger disconnect logic.
+    if (!isAttemptingReconnect && !myUserID) {
+      // Only show if initial connection fails
+      nicknameError.textContent = `Connection failed: ${err.message}.`;
+      nicknameError.classList.remove("hidden");
+      nicknameDialog.classList.remove("hidden"); // Ensure dialog is visible
+    } else if (isAttemptingReconnect) {
+      // Error during a reconnection attempt, handled by reconnect_error
+    } else {
+      // Error occurred while seemingly connected, might lead to disconnect
+      showReconnectingIndicator(
+        `Connection error: ${err.message}. Attempting to reconnect...`
+      );
+      document.body.classList.add("disconnected");
+    }
   });
 
   // Nickname Handling Callbacks
@@ -873,32 +961,49 @@ document.addEventListener("DOMContentLoaded", () => {
     nicknameDialog.classList.add("hidden"); // Hide modal
     nicknameError.classList.add("hidden");
     // Client is now authenticated, wait for 'init' event for state
+    // Re-enable UI in case it was disabled during connection attempt
+    document.body.classList.remove("disconnected");
+    hideReconnectingIndicator();
   });
 
   socket.on("nickname-error", (errorMessage) => {
     nicknameError.textContent = errorMessage;
     nicknameError.classList.remove("hidden");
+    // Keep nickname dialog open
+    document.body.classList.remove("disconnected"); // Allow interaction with dialog
+    hideReconnectingIndicator();
   });
-
+  // Initial State & Updates
   // Initial State & Updates
   socket.on("init", (data) => {
     console.log("Received initial state from server.");
+    // This now handles both initial load AND state sync after successful reconnect
     items = data.items || [];
     userMap = data.users || {};
-    bookmarks = data.bookmarks || []; // Receive own bookmarks
-    otherUsersPresence = data.presence || {}; // Receive initial presence
+    bookmarks = data.bookmarks || []; // Receive own bookmarks based on userID
+    otherUsersPresence = data.presence || {}; // Receive current presence
     updateUserCount(Object.keys(userMap).length);
     updateBookmarksList();
-    preloadImages(items); // Preload images for initial items
-    // Perform initial draw and zoom
+    preloadImages(items);
     redrawCanvas();
     redrawMinimap();
-    zoomToFitAll(true); // Zoom to fit initial items immediately
-    // Clear history on init? Or keep local history? Clear for now.
-    historyBackStack = [];
+
+    // Only zoom-to-fit on FIRST successful init, not necessarily on reconnect sync
+    if (historyBackStack.length === 0 && historyForwardStack.length === 0) {
+      zoomToFitAll(true); // Zoom to fit initial items immediately
+    }
+
+    historyBackStack = []; // Clear history on init/reconnect state sync
     historyForwardStack = [];
     updateHistoryButtons();
-    console.log(`Initialization complete. User: ${myNickname} (${myUserID})`);
+
+    // Ensure UI is enabled and indicator is hidden
+    hideReconnectingIndicator();
+    document.body.classList.remove("disconnected");
+
+    console.log(
+      `Initialization/Sync complete. User: ${myNickname} (${myUserID})`
+    );
   });
 
   socket.on("user-updated", (userData) => {
@@ -942,6 +1047,22 @@ document.addEventListener("DOMContentLoaded", () => {
       redrawMinimap();
     }
   });
+
+  function showReconnectingIndicator(message = "Attempting to reconnect...") {
+    if (!reconnectingIndicator) return;
+    reconnectingIndicator.querySelector("p").textContent = message;
+    reconnectingIndicator.classList.remove("hidden");
+  }
+
+  function hideReconnectingIndicator() {
+    if (!reconnectingIndicator) return;
+    reconnectingIndicator.classList.add("hidden");
+  }
+
+  function updateUserCount(count) {
+    // Keep this function
+    userCountSpan.textContent = `Users: ${count}`;
+  }
 
   socket.on("item-updated", (updatedData) => {
     if (!updatedData || !updatedData.id) return; // Ignore invalid data
@@ -1010,6 +1131,86 @@ document.addEventListener("DOMContentLoaded", () => {
     updateHistoryButtons();
   });
 
+  function resetClientState() {
+    console.warn("Resetting client state completely.");
+
+    // 1. Reset Core State Variables
+    myUserID = null;
+    myNickname = null;
+    userMap = {};
+    items = []; // Clear local items
+    otherUsersPresence = {};
+    bookmarks = [];
+    selectedItem = null;
+    draggedItem = null;
+    highlightedItemIDs.clear();
+    historyBackStack = [];
+    historyForwardStack = [];
+    Object.keys(imageCache).forEach((key) => delete imageCache[key]); // Clear image cache
+    isAttemptingReconnect = false; // Ensure reconnect flag is off
+    isDragging = false;
+    isPanning = false;
+    isPinching = false;
+    // Reset any other relevant state flags if needed
+
+    // 2. Clear Canvases
+    const dpr = window.devicePixelRatio || 1;
+    if (ctx) {
+      // Check if context exists
+      // Use the logical CSS size for clearing
+      const cssWidth = canvas.clientWidth;
+      const cssHeight = canvas.clientHeight;
+      // Reset transform before clearing might be safer
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Reset to DPR scale only
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+      ctx.restore();
+    }
+    if (minimapCtx) {
+      // Check if context exists
+      const miniCssWidth = minimapCanvas.clientWidth;
+      const miniCssHeight = minimapCanvas.clientHeight;
+      minimapCtx.save();
+      minimapCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      minimapCtx.clearRect(0, 0, miniCssWidth, miniCssHeight);
+      minimapCtx.restore();
+    }
+
+    // 3. Update UI Elements
+    updateUserCount("?");
+    updateBookmarksList(); // Clears the dropdown
+    updateHistoryButtons(); // Disables history buttons
+    hideContextMenu(); // Ensure context menu is hidden
+    // Ensure other dialogs are hidden (paste, tag editor)
+    pasteDialog.classList.add("hidden");
+    tagEditorDialog.classList.add("hidden");
+    currentItemForTagEditing = null;
+    // Hide progress container if it exists and isn't already hidden
+    const uploadProgressContainer = document.getElementById(
+      "upload-progress-container"
+    );
+    if (
+      uploadProgressContainer &&
+      !uploadProgressContainer.classList.contains("hidden")
+    ) {
+      uploadProgressContainer.innerHTML = ""; // Clear any stale progress items
+      uploadProgressContainer.classList.add("hidden");
+    }
+    loadingIndicator.classList.add("hidden"); // Hide generic loading indicator
+
+    // 4. Show Nickname Dialog
+    nicknameInput.value = ""; // Clear previous nickname attempt
+    nicknameError.textContent =
+      "Session ended or failed to connect. Please enter nickname to join."; // Set appropriate message
+    nicknameError.classList.remove("hidden");
+    nicknameDialog.classList.remove("hidden");
+    nicknameInput.focus();
+
+    // 5. Hide Reconnecting Indicator & Re-enable Body Interactions
+    hideReconnectingIndicator();
+    document.body.classList.remove("disconnected"); // Allow interaction with nickname dialog
+  }
+
   socket.on("user-count", (count) => updateUserCount(count));
 
   // Search/Filter Results
@@ -1050,6 +1251,58 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Helper Functions ---
   function updateUserCount(count) {
     userCountSpan.textContent = `Users: ${count}`;
+  }
+
+  if (toolbar && toolbarToggleBtn && toggleIcon) {
+    // <<< UPDATED check (no container)
+    const TOOLBAR_COLLAPSED_KEY = "toolbarCollapsed";
+
+    // Function to set state
+    const setToolbarState = (collapsed) => {
+      if (collapsed) {
+        toolbar.classList.add("collapsed"); // Collapse the toolbar itself
+        toolbarToggleBtn.classList.add("collapsed"); // Add class to button for icon styling
+        // toggleIcon.textContent = '🔼'; // Or set specific icon for "show"
+        toolbarToggleBtn.title = "Show Toolbar";
+      } else {
+        toolbar.classList.remove("collapsed"); // Expand the toolbar
+        toolbarToggleBtn.classList.remove("collapsed"); // Remove class from button
+        // toggleIcon.textContent = '🔼'; // Or set specific icon for "hide"
+        toolbarToggleBtn.title = "Hide Toolbar";
+      }
+      // Save state to localStorage
+      try {
+        localStorage.setItem(TOOLBAR_COLLAPSED_KEY, collapsed);
+      } catch (e) {
+        console.warn(
+          "LocalStorage not available or error saving toolbar state:",
+          e
+        );
+      }
+    };
+
+    // Add click listener to the toggle button
+    toolbarToggleBtn.addEventListener("click", () => {
+      // Check the button's class for current state
+      const isCurrentlyCollapsed =
+        toolbarToggleBtn.classList.contains("collapsed"); // <<< UPDATED Check button's class
+      setToolbarState(!isCurrentlyCollapsed); // Toggle the state
+    });
+
+    // Initialize state from localStorage on load
+    let initialStateCollapsed = false;
+    try {
+      initialStateCollapsed =
+        localStorage.getItem(TOOLBAR_COLLAPSED_KEY) === "true";
+    } catch (e) {
+      console.warn(
+        "LocalStorage not available or error reading toolbar state:",
+        e
+      );
+    }
+    setToolbarState(initialStateCollapsed); // Apply initial state
+  } else {
+    console.error("Toolbar elements not found (toolbar or toggle button)!"); // <<< UPDATED Error message
   }
 
   function preloadImages(itemList) {
@@ -1158,10 +1411,9 @@ document.addEventListener("DOMContentLoaded", () => {
     contextMenu.classList.remove("hidden");
 
     // Toggle visibility of context menu items based on selected item type
-    downloadBtn.classList.toggle(
-      "hidden",
-      !(item.type === "file" && item.content)
-    );
+    const canDownload =
+      (item.type === "file" || item.type === "image") && item.content;
+    downloadBtn.classList.toggle("hidden", !canDownload);
     editTagsBtn.classList.remove("hidden"); // Always show tag button for any selected item
 
     const isTextItem = item.type === "text";
@@ -1802,8 +2054,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const finalX = draggedItem.x;
       const finalY = draggedItem.y;
       console.log(
-        `Item ${
-          draggedItem.id
+        `Item ${draggedItem.id
         } drag cancel (mouseleave). Pos: (${finalX.toFixed(
           1
         )}, ${finalY.toFixed(1)})`
@@ -2287,27 +2538,52 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   downloadBtn.addEventListener("click", () => {
-    if (selectedItem && selectedItem.type === "file" && selectedItem.content) {
-      // Trigger download for file items
-      const link = document.createElement("a");
-      link.href = selectedItem.content; // Should be the server path like /uploads/...
-      link.download = selectedItem.originalName || "download"; // Use original filename
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      hideContextMenu();
-      // Deselect after action?
-      // selectedItem = null;
-      // redrawCanvas();
+    // Check if there's a selected item with content and it's either a file or an image
+    if (
+      selectedItem &&
+      selectedItem.content &&
+      (selectedItem.type === "file" || selectedItem.type === "image")
+    ) {
+      try {
+        const link = document.createElement("a");
+        link.href = selectedItem.content; // Works for file paths and data URLs
+
+        // Determine filename: use originalName if available, otherwise provide defaults
+        if (selectedItem.type === "file") {
+          link.download = selectedItem.originalName || "download"; // Default for files
+        } else {
+          // type === 'image'
+          link.download = selectedItem.originalName || "canvas_image.png"; // Default for images
+        }
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        console.log(
+          `Download initiated for ${selectedItem.type}: ${link.download}`
+        );
+      } catch (error) {
+        console.error("Error initiating download:", error);
+        alert("Could not initiate download."); // Inform user
+      } finally {
+        hideContextMenu(); // Hide menu after attempt
+        // Deselect after action? Optional, keeping it selected for now.
+        // selectedItem = null;
+        // redrawCanvas();
+      }
+    } else {
+      console.warn(
+        "Download button clicked, but no suitable item selected or item lacks content."
+      );
+      hideContextMenu(); // Hide menu even if no action taken
     }
   });
 
   editTagsBtn.addEventListener("click", () => {
     if (selectedItem && myUserID) {
       currentItemForTagEditing = selectedItem; // Store reference to item being edited
-      tagEditorTitle.textContent = `Edit Tags: ${
-        selectedItem.originalName || selectedItem.type
-      }`;
+      tagEditorTitle.textContent = `Edit Tags: ${selectedItem.originalName || selectedItem.type
+        }`;
       populateTagEditor(selectedItem.tags || []); // Populate editor with current tags
       tagEditorDialog.classList.remove("hidden"); // Show editor modal
       newTagInput.focus();
@@ -2395,12 +2671,27 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener(
     "click",
     (e) => {
+      if (document.body.classList.contains("disconnected")) return; // Ignore clicks if disconnected
       // Hide context menu if clicking outside of it
       if (
         !contextMenu.classList.contains("hidden") &&
         !contextMenu.contains(e.target)
       ) {
-        hideContextMenu();
+        // ... (rest of context menu hiding logic) ...
+        const clickTargetIsButtonInsideMenu =
+          contextMenu.contains(e.target) && e.target.tagName === "BUTTON";
+        if (!clickTargetIsButtonInsideMenu) {
+          hideContextMenu();
+          // Optional: Deselect item if clicking on canvas background
+          if (
+            selectedItem &&
+            e.target === canvas &&
+            !getItemAtPos(getMousePos(canvas, e)?.x, getMousePos(canvas, e)?.y)
+          ) {
+            selectedItem = null;
+            redrawCanvas();
+          }
+        }
       }
 
       // Close tag editor if clicking outside? (Might need refinement)
@@ -2448,109 +2739,120 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleFiles(fileList, dropWorldX, dropWorldY) {
     if (!fileList || fileList.length === 0 || !myUserID) return;
 
-    const uploadProgressContainer = document.getElementById('upload-progress-container');
+    const uploadProgressContainer = document.getElementById(
+      "upload-progress-container"
+    );
     if (!uploadProgressContainer) {
-        console.error("Upload progress container element not found!");
-        // Fallback: Show the old generic loading indicator if the new container is missing
-        loadingIndicator.classList.remove("hidden");
-        // Still attempt to process files without detailed progress UI
+      console.error("Upload progress container element not found!");
+      // Fallback: Show the old generic loading indicator if the new container is missing
+      loadingIndicator.classList.remove("hidden");
+      // Still attempt to process files without detailed progress UI
     } else {
-        // Make the container visible if it's not already
-        uploadProgressContainer.classList.remove('hidden');
-        uploadProgressContainer.style.display = 'flex'; // Ensure flex display is set
-        // Hide the old generic loading indicator if we are using the new system
-        loadingIndicator.classList.add("hidden");
+      // Make the container visible if it's not already
+      uploadProgressContainer.classList.remove("hidden");
+      uploadProgressContainer.style.display = "flex"; // Ensure flex display is set
+      // Hide the old generic loading indicator if we are using the new system
+      loadingIndicator.classList.add("hidden");
     }
 
-    console.log(`Handling ${fileList.length} file(s) at world (${dropWorldX.toFixed(0)}, ${dropWorldY.toFixed(0)})`);
+    console.log(
+      `Handling ${fileList.length} file(s) at world (${dropWorldX.toFixed(
+        0
+      )}, ${dropWorldY.toFixed(0)})`
+    );
 
     const spacingX_world = 50; // Horizontal spacing for multiple files in world coordinates
     const spacingY_world = 0; // Vertical spacing
 
     // --- Helper Function to Manage Progress UI ---
-    const manageProgressUI = (uploadId, status, value = 0, message = '') => {
-        const element = document.getElementById(uploadId);
-        if (!element) return; // Element might have been removed already
+    const manageProgressUI = (uploadId, status, value = 0, message = "") => {
+      const element = document.getElementById(uploadId);
+      if (!element) return; // Element might have been removed already
 
-        const progressBar = element.querySelector('.progress-bar');
-        const progressText = element.querySelector('.progress-text');
-        const filenameSpan = element.querySelector('.filename');
+      const progressBar = element.querySelector(".progress-bar");
+      const progressText = element.querySelector(".progress-text");
+      const filenameSpan = element.querySelector(".filename");
 
-        // Reset classes first
-        element.classList.remove('processing', 'completed', 'error', 'fade-out');
+      // Reset classes first
+      element.classList.remove("processing", "completed", "error", "fade-out");
 
-        switch (status) {
-            case 'processing':
-                element.classList.add('processing');
-                if (progressBar) {
-                    progressBar.style.width = '100%'; // Indicate activity
-                    progressBar.style.transition = 'none'; // No transition for processing indication
-                }
-                if (progressText) progressText.textContent = 'Processing';
-                break;
-            case 'uploading':
-                if (progressBar) {
-                    progressBar.style.transition = 'width 0.15s linear'; // Restore transition
-                    progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
-                }
-                if (progressText) progressText.textContent = `${Math.round(Math.max(0, Math.min(100, value)))}%`;
-                break;
-            case 'completed':
-                element.classList.add('completed');
-                if (progressBar) progressBar.style.width = '100%';
-                if (progressText) progressText.textContent = 'Done';
-                // Add fade-out class, then remove after animation
-                element.classList.add('fade-out');
-                setTimeout(() => {
-                    element.remove();
-                    checkHideProgressContainer(); // Check if container should be hidden
-                }, 600); // Corresponds to CSS transition duration
-                break;
-            case 'error':
-                element.classList.add('error');
-                if (progressBar) progressBar.style.width = '100%'; // Indicate error state
-                if (progressText) progressText.textContent = 'Error';
-                if (filenameSpan) filenameSpan.title = message || 'Upload failed'; // Show error on hover
-                // Add fade-out class, then remove after animation (longer delay for errors)
-                element.classList.add('fade-out');
-                setTimeout(() => {
-                    element.remove();
-                    checkHideProgressContainer(); // Check if container should be hidden
-                }, 5000); // Keep error visible longer
-                break;
-            default: // E.g., 'waiting' or initial state
-                if (progressBar) progressBar.style.width = '0%';
-                if (progressText) progressText.textContent = 'Waiting...';
-        }
+      switch (status) {
+        case "processing":
+          element.classList.add("processing");
+          if (progressBar) {
+            progressBar.style.width = "100%"; // Indicate activity
+            progressBar.style.transition = "none"; // No transition for processing indication
+          }
+          if (progressText) progressText.textContent = "Processing";
+          break;
+        case "uploading":
+          if (progressBar) {
+            progressBar.style.transition = "width 0.15s linear"; // Restore transition
+            progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+          }
+          if (progressText)
+            progressText.textContent = `${Math.round(
+              Math.max(0, Math.min(100, value))
+            )}%`;
+          break;
+        case "completed":
+          element.classList.add("completed");
+          if (progressBar) progressBar.style.width = "100%";
+          if (progressText) progressText.textContent = "Done";
+          // Add fade-out class, then remove after animation
+          element.classList.add("fade-out");
+          setTimeout(() => {
+            element.remove();
+            checkHideProgressContainer(); // Check if container should be hidden
+          }, 600); // Corresponds to CSS transition duration
+          break;
+        case "error":
+          element.classList.add("error");
+          if (progressBar) progressBar.style.width = "100%"; // Indicate error state
+          if (progressText) progressText.textContent = "Error";
+          if (filenameSpan) filenameSpan.title = message || "Upload failed"; // Show error on hover
+          // Add fade-out class, then remove after animation (longer delay for errors)
+          element.classList.add("fade-out");
+          setTimeout(() => {
+            element.remove();
+            checkHideProgressContainer(); // Check if container should be hidden
+          }, 5000); // Keep error visible longer
+          break;
+        default: // E.g., 'waiting' or initial state
+          if (progressBar) progressBar.style.width = "0%";
+          if (progressText) progressText.textContent = "Waiting...";
+      }
     };
 
     // --- Helper Function to Check if Container Should Be Hidden ---
     const checkHideProgressContainer = () => {
-        if (uploadProgressContainer && uploadProgressContainer.children.length === 0) {
-            uploadProgressContainer.classList.add('hidden');
-            uploadProgressContainer.style.display = 'none'; // Explicitly hide
-        }
+      if (
+        uploadProgressContainer &&
+        uploadProgressContainer.children.length === 0
+      ) {
+        uploadProgressContainer.classList.add("hidden");
+        uploadProgressContainer.style.display = "none"; // Explicitly hide
+      }
     };
-
 
     // --- Process Each File ---
     Array.from(fileList).forEach((file, index) => {
-        const uploadId = `upload-${Date.now()}-${index}`; // Simple unique ID for the UI element
+      const uploadId = `upload-${Date.now()}-${index}`; // Simple unique ID for the UI element
 
-        // Calculate item position in world coordinates
-        let fileX = dropWorldX + index * spacingX_world;
-        let fileY = dropWorldY + index * spacingY_world;
-        if (isSnapEnabled) {
-            fileX = Math.round(fileX / GRID_SIZE) * GRID_SIZE;
-            fileY = Math.round(fileY / GRID_SIZE) * GRID_SIZE;
-        }
+      // Calculate item position in world coordinates
+      let fileX = dropWorldX + index * spacingX_world;
+      let fileY = dropWorldY + index * spacingY_world;
+      if (isSnapEnabled) {
+        fileX = Math.round(fileX / GRID_SIZE) * GRID_SIZE;
+        fileY = Math.round(fileY / GRID_SIZE) * GRID_SIZE;
+      }
 
-        // Create the progress UI element only if the container exists
-        if (uploadProgressContainer) {
-            const progressElement = document.createElement('div');
-            progressElement.id = uploadId;
-            progressElement.className = 'upload-progress-item';
-            progressElement.innerHTML = `
+      // Create the progress UI element only if the container exists
+      if (uploadProgressContainer) {
+        const progressElement = document.createElement("div");
+        progressElement.id = uploadId;
+        progressElement.className = "upload-progress-item";
+        progressElement.innerHTML = `
                 <span class="filename" title="${file.name}">${file.name}</span>
                 <div class="progress-info">
                     <div class="progress-bar-container">
@@ -2559,117 +2861,132 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="progress-text">0%</span>
                 </div>
             `;
-            uploadProgressContainer.appendChild(progressElement);
-        } else {
-             // If container doesn't exist, we can't show progress, but still log
-             console.log(`Starting processing for ${file.name} (no UI container)`);
-        }
+        uploadProgressContainer.appendChild(progressElement);
+      } else {
+        // If container doesn't exist, we can't show progress, but still log
+        console.log(`Starting processing for ${file.name} (no UI container)`);
+      }
 
+      // --- Handle File Type ---
+      if (file.type.startsWith("image/")) {
+        // Handle image files by reading as data URL (client-side processing)
+        manageProgressUI(uploadId, "processing");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          socket.emit("add-item", {
+            type: "image",
+            content: e.target.result, // base64 data URL
+            x: fileX,
+            y: fileY,
+            originalName: file.name,
+            // Note: width/height will be calculated on first draw if needed
+          });
+          manageProgressUI(uploadId, "completed"); // Mark as complete
+        };
+        reader.onerror = (err) => {
+          console.error(`FileReader error for ${file.name}:`, err);
+          manageProgressUI(uploadId, "error", 0, `Could not read image file`);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Handle other files by uploading via XMLHttpRequest for progress
+        manageProgressUI(uploadId, "uploading", 0); // Set initial state to 0%
 
-        // --- Handle File Type ---
-        if (file.type.startsWith("image/")) {
-            // Handle image files by reading as data URL (client-side processing)
-            manageProgressUI(uploadId, 'processing');
-            const reader = new FileReader();
-            reader.onload = (e) => {
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append("file", file); // Field name must match server (multer expects 'file')
+
+        // Progress Handler
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            manageProgressUI(uploadId, "uploading", percentComplete);
+          } else {
+            // Cannot compute progress (e.g., chunked transfer encoding)
+            // Show indeterminate state? For now, just stays at 0% or last known %.
+            // manageProgressUI(uploadId, 'uploading', -1); // Could use -1 to indicate indeterminate
+            console.log(`Upload progress not computable for ${file.name}`);
+          }
+        });
+
+        // Completion Handler (Load event fires for both success and error statuses)
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Success statuses
+            try {
+              const result = JSON.parse(xhr.responseText);
+              // Check if server actually returned expected data
+              if (result && result.path && result.originalname) {
                 socket.emit("add-item", {
-                    type: "image",
-                    content: e.target.result, // base64 data URL
-                    x: fileX,
-                    y: fileY,
-                    originalName: file.name,
-                    // Note: width/height will be calculated on first draw if needed
+                  type: "file",
+                  content: result.path, // Server path (e.g., /uploads/uuid.ext)
+                  x: fileX,
+                  y: fileY,
+                  originalName: result.originalname,
+                  mimetype: result.mimetype,
                 });
-                 manageProgressUI(uploadId, 'completed'); // Mark as complete
-            };
-            reader.onerror = (err) => {
-                console.error(`FileReader error for ${file.name}:`, err);
-                manageProgressUI(uploadId, 'error', 0, `Could not read image file`);
-            };
-            reader.readAsDataURL(file);
+                manageProgressUI(uploadId, "completed");
+              } else {
+                console.error(
+                  `Invalid success response for ${file.name}:`,
+                  xhr.responseText
+                );
+                manageProgressUI(
+                  uploadId,
+                  "error",
+                  0,
+                  "Invalid server response"
+                );
+              }
+            } catch (parseError) {
+              console.error(
+                `Error parsing upload response for ${file.name}:`,
+                parseError,
+                xhr.responseText
+              );
+              manageProgressUI(uploadId, "error", 0, "Server response error");
+            }
+          } else {
+            // Handle HTTP error status (4xx, 5xx)
+            let errorMsg = `Upload failed (${xhr.status})`;
+            try {
+              // Try to parse error message from server JSON response
+              const errorJson = JSON.parse(xhr.responseText);
+              errorMsg = errorJson.error || errorMsg;
+            } catch (_) {
+              /* Ignore parsing error if response is not JSON */
+            }
+            console.error(
+              `Upload failed for ${file.name}: ${xhr.status} ${xhr.statusText}`,
+              xhr.responseText
+            );
+            manageProgressUI(uploadId, "error", 0, errorMsg);
+          }
+        });
 
-        } else {
-            // Handle other files by uploading via XMLHttpRequest for progress
-            manageProgressUI(uploadId, 'uploading', 0); // Set initial state to 0%
+        // Network Error Handler
+        xhr.addEventListener("error", () => {
+          console.error(`Network error during upload for ${file.name}`);
+          manageProgressUI(uploadId, "error", 0, "Network error");
+        });
 
-            const xhr = new XMLHttpRequest();
-            const formData = new FormData();
-            formData.append("file", file); // Field name must match server (multer expects 'file')
+        // Abort Handler (Optional - if you add a cancel button)
+        xhr.addEventListener("abort", () => {
+          console.log(`Upload aborted for ${file.name}`);
+          manageProgressUI(uploadId, "error", 0, "Aborted"); // Or just remove silently
+        });
 
-            // Progress Handler
-            xhr.upload.addEventListener("progress", (event) => {
-                if (event.lengthComputable) {
-                    const percentComplete = (event.loaded / event.total) * 100;
-                    manageProgressUI(uploadId, 'uploading', percentComplete);
-                } else {
-                    // Cannot compute progress (e.g., chunked transfer encoding)
-                    // Show indeterminate state? For now, just stays at 0% or last known %.
-                    // manageProgressUI(uploadId, 'uploading', -1); // Could use -1 to indicate indeterminate
-                    console.log(`Upload progress not computable for ${file.name}`);
-                }
-            });
-
-            // Completion Handler (Load event fires for both success and error statuses)
-            xhr.addEventListener("load", () => {
-                if (xhr.status >= 200 && xhr.status < 300) { // Success statuses
-                    try {
-                        const result = JSON.parse(xhr.responseText);
-                        // Check if server actually returned expected data
-                        if (result && result.path && result.originalname) {
-                           socket.emit("add-item", {
-                                type: "file",
-                                content: result.path, // Server path (e.g., /uploads/uuid.ext)
-                                x: fileX,
-                                y: fileY,
-                                originalName: result.originalname,
-                                mimetype: result.mimetype,
-                           });
-                           manageProgressUI(uploadId, 'completed');
-                        } else {
-                             console.error(`Invalid success response for ${file.name}:`, xhr.responseText);
-                             manageProgressUI(uploadId, 'error', 0, 'Invalid server response');
-                        }
-                    } catch (parseError) {
-                        console.error(`Error parsing upload response for ${file.name}:`, parseError, xhr.responseText);
-                        manageProgressUI(uploadId, 'error', 0, 'Server response error');
-                    }
-                } else {
-                    // Handle HTTP error status (4xx, 5xx)
-                    let errorMsg = `Upload failed (${xhr.status})`;
-                    try {
-                        // Try to parse error message from server JSON response
-                        const errorJson = JSON.parse(xhr.responseText);
-                        errorMsg = errorJson.error || errorMsg;
-                    } catch (_) { /* Ignore parsing error if response is not JSON */ }
-                    console.error(`Upload failed for ${file.name}: ${xhr.status} ${xhr.statusText}`, xhr.responseText);
-                    manageProgressUI(uploadId, 'error', 0, errorMsg);
-                }
-            });
-
-            // Network Error Handler
-            xhr.addEventListener("error", () => {
-                console.error(`Network error during upload for ${file.name}`);
-                manageProgressUI(uploadId, 'error', 0, 'Network error');
-            });
-
-            // Abort Handler (Optional - if you add a cancel button)
-            xhr.addEventListener("abort", () => {
-                console.log(`Upload aborted for ${file.name}`);
-                manageProgressUI(uploadId, 'error', 0, 'Aborted'); // Or just remove silently
-            });
-
-            // Send the request
-            xhr.open("POST", "/upload", true); // POST to the '/upload' endpoint
-            // Set headers if needed (e.g., authentication)
-            // xhr.setRequestHeader('Authorization', 'Bearer YOUR_TOKEN');
-            xhr.send(formData);
-        }
+        // Send the request
+        xhr.open("POST", "/upload", true); // POST to the '/upload' endpoint
+        // Set headers if needed (e.g., authentication)
+        // xhr.setRequestHeader('Authorization', 'Bearer YOUR_TOKEN');
+        xhr.send(formData);
+      }
     });
 
     // Initial check in case no files were processed (e.g., empty fileList)
     checkHideProgressContainer();
-}
-
+  }
 
   // --- Presence Update Sending (Throttled) ---
   let lastPresenceUpdateTime = 0;

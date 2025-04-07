@@ -9,6 +9,9 @@
     <!-- Link to the stylesheet -->
   </head>
   <body>
+    <button id="toolbar-toggle-btn" class="toolbar-tab" title="Hide Toolbar">
+        <span class="icon">🔼</span>
+      </button>
     <!-- Nickname Modal (Initially Hidden, covers everything) -->
     <div id="nickname-dialog" class="modal">
       <!-- Initially visible until hidden by JS -->
@@ -30,54 +33,46 @@
 
     <!-- Toolbar at the top -->
     <div id="toolbar">
-      <!-- Left Side: Actions -->
-      <button id="upload-btn" title="Upload File">📁</button>
-      <input type="file" id="file-input" hidden multiple />
-      <!-- Moved input near button -->
-      <button id="paste-btn" title="Paste Text">📝</button>
-      <button id="clear-canvas-btn" title="Clear Canvas">🗑️</button>
-
-      <!-- Center: Search & Filter -->
-      <div class="toolbar-section search-filter-section">
-        <input
-          type="search"
-          id="search-input"
-          placeholder="Search filename/tags..."
-        />
-        <!-- Basic filter placeholders - could be buttons opening a panel -->
-        <button id="filter-type-btn" title="Filter by Type">Type</button>
-        <button id="filter-date-btn" title="Filter by Date">Date</button>
-        <button id="filter-tag-btn" title="Filter by Tag">Tag</button>
-        <!-- Add more complex filter UI later -->
-      </div>
-
-      <!-- Right Side: Navigation & View -->
-      <div class="toolbar-section view-nav-section">
-        <button id="zoom-in-btn" title="Zoom In">+</button>
-        <button id="zoom-out-btn" title="Zoom Out">-</button>
-        <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
-        <button id="history-back-btn" title="Navigate Back" disabled>←</button>
-        <button id="history-forward-btn" title="Navigate Forward" disabled>
-          →
-        </button>
-        <button id="save-view-btn" title="Save Current View">
-          💾 Bookmark
-        </button>
-        <!-- Bookmark list placeholder -->
-        <select id="bookmarks-list" title="Go to Bookmark">
-          <option value="">Go to...</option>
-          <!-- Bookmarks added dynamically by JS -->
-        </select>
-        <button id="grid-snap-toggle" title="Toggle Grid Snap">Grid</button>
-      </div>
-
-      <!-- Far Right: Info & Settings -->
-      <div class="toolbar-section info-settings-section">
-        <button id="qr-toggle-btn" title="Show/Hide QR Code">🖨️</button>
-        <span id="user-count" title="Connected Users">Users: ?</span>
-        <!-- <button id="settings-btn" title="Settings">⚙️</button> -->
-      </div>
-    </div>
+        <div class="toolbar-content">
+          <!-- All toolbar groups go here... -->
+          <!-- Group 1: File/Content Actions -->
+          <div class="toolbar-group">
+            <button id="upload-btn" title="Upload File"><span class="icon">📁</span> Upload</button>
+            <input type="file" id="file-input" hidden multiple />
+            <button id="paste-btn" title="Paste Text"><span class="icon">📝</span> Paste</button>
+            <button id="clear-canvas-btn" title="Clear Canvas"><span class="icon">🗑️</span> Clear All</button>
+          </div>
+          <!-- Group 2: Search & Filter -->
+          <div class="toolbar-group search-group">
+             <span class="icon search-icon">🔍</span>
+             <input type="search" id="search-input" placeholder="Search content..." />
+             <button id="filter-type-btn" title="Filter by Type" style="display: none">Type</button>
+             <button id="filter-date-btn" title="Filter by Date" style="display: none">Date</button>
+             <button id="filter-tag-btn" title="Filter by Tag" style="display: none">Tag</button>
+          </div>
+          <!-- Group 3: View & Navigation -->
+          <div class="toolbar-group">
+            <button id="zoom-in-btn" title="Zoom In"><span class="icon">+</span></button>
+            <button id="zoom-out-btn" title="Zoom Out"><span class="icon">-</span></button>
+            <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
+            <button id="history-back-btn" title="Navigate Back" disabled><span class="icon">←</span></button>
+            <button id="history-forward-btn" title="Navigate Forward" disabled><span class="icon">→</span></button>
+          </div>
+          <!-- Group 4: Bookmarks -->
+          <div class="toolbar-group">
+             <button id="save-view-btn" title="Save Current View"><span class="icon">💾</span> Bookmark</button>
+             <select id="bookmarks-list" title="Go to Bookmark">
+               <option value="">Go to Bookmark...</option>
+             </select>
+          </div>
+          <!-- Group 5: Info & Settings (Right Aligned) -->
+          <div class="toolbar-group info-group">
+            <button id="qr-toggle-btn" title="Show/Hide QR Code"><span class="icon">📱</span> Share</button>
+            <span id="user-count" title="Connected Users"><span class="icon">👥</span> ?</span>
+            <button id="grid-snap-toggle" title="Toggle Grid Snap" style="display: none">Grid</button>
+          </div>
+        </div> <!-- End .toolbar-content -->
+      </div> <!-- End #toolbar -->
 
     <!-- Container for the QR Code (initially hidden) -->
     <div id="qr-container" class="hidden">
@@ -136,10 +131,16 @@
       </div>
     </div>
 
+    <div id="reconnecting-indicator" class="hidden">
+      <p>Connection lost. Attempting to reconnect...</p>
+    </div>
+
     <!-- Container for Upload Progress Indicators -->
     <div id="upload-progress-container" class="hidden">
       <!-- Progress items will be added here dynamically by client.js -->
     </div>
+
+    
 
     <!-- Load Socket.IO client library -->
     <script src="/socket.io/socket.io.js"></script>
