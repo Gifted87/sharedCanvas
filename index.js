@@ -2,7 +2,7 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const fs = require('fs'); // Required for path checking
-const { startServer, cleanupUploads, saveCanvasState } = require("./server.js"); // Import server functions
+const { startServer, cleanupUploads, saveCanvasState, getLocalIP } = require("./server.js"); // Import server functions
 
 let mainWindow;
 
@@ -42,9 +42,9 @@ function createWindow() {
 
   // Start the embedded Node.js server (Express + Socket.IO)
   startServer();
-
+const IP = getLocalIP(); // Get the local IP address
   // Load the app's frontend from the local server
-  mainWindow.loadURL("http://192.168.43.45:3000");
+  mainWindow.loadURL(`http://${IP}:3000`);
 
   // Automatically open Chrome DevTools for debugging (keep uncommented for development)
   mainWindow.webContents.openDevTools();

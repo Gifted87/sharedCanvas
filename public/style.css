@@ -78,6 +78,7 @@ body {
     /* Be visible immediately when expanding */ opacity 0.3s ease 0.1s; /* Fade in slightly delayed */
   visibility: visible;
   opacity: 1;
+  padding-top: 20px;;
 }
 
 /* Collapsed State */
@@ -290,7 +291,7 @@ body {
   border-radius: 8px;
   z-index: 110; /* Above fixed button */
   text-align: center;
-  max-width: 250px;
+  max-width: 300px;
 }
 #qr-container img {
   max-width: 100%;
@@ -731,4 +732,107 @@ body.disconnected #nickname-dialog,
 body.disconnected #reconnecting-indicator,
 body.disconnected .toolbar-tab {
   pointer-events: auto; /* Re-enable pointer events for nickname, indicator, and toggle button */
+}
+
+
+/* --- Mobile Toolbar Adjustments --- */
+@media (max-width: 768px) {
+  :root {
+      /* Reduce global padding/gap variables specifically for mobile */
+      --toolbar-padding-y: 8px;   /* Less vertical padding in the toolbar */
+      --toolbar-padding-x: 10px;  /* Less horizontal padding in the toolbar */
+      --element-padding-y: 6px;   /* Less vertical padding for buttons/inputs */
+      --element-padding-x: 10px;  /* Less horizontal padding for buttons/inputs */
+      --element-gap: 8px;       /* Smaller gap between elements */
+  }
+
+  /* Apply reduced padding directly to toolbar content */
+  .toolbar-content {
+      padding: var(--toolbar-padding-y) var(--toolbar-padding-x);
+      justify-content: center; /* Center items better when they wrap */
+      /* You could also use flex-start if preferred */
+  }
+
+  /* Reduce base font size for most toolbar elements */
+  .toolbar-content button,
+  .toolbar-content select,
+  .toolbar-content span#user-count {
+      font-size: 0.85em; /* Smaller text */
+      padding: var(--element-padding-y) var(--element-padding-x); /* Apply smaller padding */
+  }
+
+  /* Keep search input readable but adjust padding */
+  .toolbar-content input[type="search"] {
+      font-size: 0.9em;
+      padding: var(--element-padding-y) 8px;
+  }
+
+  /* Adjust select dropdown arrow position due to padding change */
+  .toolbar-content select {
+       padding-right: calc(var(--element-padding-x) * 2 + 0.8em); /* Recalculate right padding */
+       background-position: right var(--element-padding-x) center;
+       background-size: 0.8em 0.8em; /* Slightly smaller arrow */
+  }
+
+  .toolbar-content .toolbar-group {
+    /* Allow groups to shrink if space is tight */
+    flex-shrink: 1;
+    /* Ensure they wrap onto the next line */
+    flex-basis: auto; /* Allow natural wrapping based on content */
+}
+
+/* Make the search group smaller and more flexible */
+.toolbar-content .toolbar-group.search-group {
+    min-width: 120px;    /* Allow it to get narrower */
+    flex-grow: 1;        /* Keep growing if space allows */
+    flex-shrink: 1;      /* Ensure it shrinks */
+    padding: 2px 8px;    /* Tighter padding */
+    order: 5;            /* Optional: Move search towards the end on mobile */
+}
+
+/* Ensure search input itself can shrink */
+ .toolbar-content input[type="search"] {
+    min-width: 80px; /* Prevent it becoming unusable */
+ }
+
+/* Remove the auto margin pushing the info group right when centered */
+.toolbar-content .toolbar-group.info-group {
+    margin-left: 0;
+}
+
+/* Optional: Change order of groups if desired */
+/* Example: Move View group earlier */
+/* .toolbar-content .toolbar-group:nth-child(3) { order: 1; } */
+/* .toolbar-content .toolbar-group:nth-child(1) { order: 2; } */
+/* etc. */
+
+/* Make buttons smaller, especially icon-heavy ones */
+.toolbar-content button {
+  min-width: auto; /* Remove fixed min-width if any was set */
+}
+
+/* Specific tighter padding for icon-centric buttons */
+#zoom-in-btn,
+#zoom-out-btn,
+#history-back-btn,
+#history-forward-btn {
+   padding-left: 8px;
+   padding-right: 8px;
+}
+
+/* Slightly more padding for buttons where text is more important */
+#upload-btn,
+#paste-btn,
+#clear-canvas-btn,
+#zoom-fit-btn,
+#save-view-btn,
+#qr-toggle-btn {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* Optionally make icons slightly more prominent on smaller buttons */
+/* .toolbar-content button .icon {
+  font-size: 1.2em;
+} */
 }

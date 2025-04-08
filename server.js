@@ -215,7 +215,7 @@ const startServer = () => {
         }
       });
       if (isTaken) {
-        socket.emit("nickname-error", "Nickname is already taken.");
+        socket.emit("nickname-error", "Name is already taken.");
         return;
       }
 
@@ -652,4 +652,4 @@ process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 process.on('SIGQUIT', () => handleShutdown('SIGQUIT'));
 // --- END NEW Graceful Shutdown Handling ---
 
-module.exports = { startServer, cleanupUploads, saveCanvasState };
+module.exports = { startServer, cleanupUploads, saveCanvasState, getLocalIP };

@@ -1334,7 +1334,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateUserCount(count) {
     // Keep this function
-    userCountSpan.textContent = `Users: ${count}`;
+    userCountSpan.textContent = `Devices: ${count}`;
   }
 
   socket.on("item-updated", (updatedData) => {
@@ -1539,7 +1539,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Helper Functions ---
   function updateUserCount(count) {
-    userCountSpan.textContent = `Users: ${count}`;
+    userCountSpan.textContent = `Devices: ${count}`;
   }
 
   if (toolbar && toolbarToggleBtn && toggleIcon) {
@@ -1950,7 +1950,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (nick && nick.trim().length > 0 && nick.length <= 30) {
       socket.emit("set-nickname", nick.trim());
     } else {
-      nicknameError.textContent = "Nickname must be 1-30 characters.";
+      nicknameError.textContent = "Name must be 1-30 characters.";
       nicknameError.classList.remove("hidden");
     }
   });

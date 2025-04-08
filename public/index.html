@@ -17,7 +17,7 @@
       <!-- Initially visible until hidden by JS -->
       <div class="modal-content nickname-modal-content">
         <!-- Added specific class -->
-        <h3>Welcome! Please enter your nickname:</h3>
+        <h3>Enter the name of this device:</h3>
         <input
           type="text"
           id="nickname-input"
@@ -43,7 +43,7 @@
             <button id="clear-canvas-btn" title="Clear Canvas"><span class="icon">🗑️</span> Clear All</button>
           </div>
           <!-- Group 2: Search & Filter -->
-          <div class="toolbar-group search-group">
+          <div class="toolbar-group search-group" style="display: none;">
              <span class="icon search-icon">🔍</span>
              <input type="search" id="search-input" placeholder="Search content..." />
              <button id="filter-type-btn" title="Filter by Type" style="display: none">Type</button>
@@ -60,14 +60,14 @@
           </div>
           <!-- Group 4: Bookmarks -->
           <div class="toolbar-group">
-             <button id="save-view-btn" title="Save Current View"><span class="icon">💾</span> Bookmark</button>
+             <button id="save-view-btn" title="Save Current View"><span class="icon">💾</span> Save this Section</button>
              <select id="bookmarks-list" title="Go to Bookmark">
-               <option value="">Go to Bookmark...</option>
+               <option value="">Saved Sections</option>
              </select>
           </div>
           <!-- Group 5: Info & Settings (Right Aligned) -->
           <div class="toolbar-group info-group">
-            <button id="qr-toggle-btn" title="Show/Hide QR Code"><span class="icon">📱</span> Share</button>
+            <button id="qr-toggle-btn" title="Show/Hide QR Code"><span class="icon">🔗</span> Connect</button>
             <span id="user-count" title="Connected Users"><span class="icon">👥</span> ?</span>
             <button id="grid-snap-toggle" title="Toggle Grid Snap" style="display: none;">Grid</button>
           </div>
@@ -77,7 +77,7 @@
     <!-- Container for the QR Code (initially hidden) -->
     <div id="qr-container" class="hidden">
       <img id="qr-code-img" src="" alt="QR Code Loading..." />
-      <p>Scan or visit: <span id="server-url"></span></p>
+      <p>Connect via WiFi then scan or visit: <span id="server-url"></span></p>
       <button id="qr-close-btn" title="Close QR Code">X</button>
     </div>
 
@@ -145,10 +145,10 @@
     <div id="bookmark-dialog" class="modal hidden">
       <div class="modal-content">
         <h3>Save Current View</h3>
-        <input type="text" id="bookmark-name-input" placeholder="Enter bookmark name" autocomplete="off" />
+        <input type="text" id="bookmark-name-input" placeholder="Name this section" autocomplete="off" />
         <p id="bookmark-error" class="error-message hidden"></p> <!-- Error message area -->
         <div class="modal-buttons">
-          <button id="bookmark-save-btn">Save Bookmark</button>
+          <button id="bookmark-save-btn">Save Section</button>
           <button id="bookmark-cancel-btn">Cancel</button>
         </div>
       </div>
