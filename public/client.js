@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadBtn = document.getElementById("download-btn");
   const editTagsBtn = document.getElementById("edit-tags-btn"); // Context menu item for tags
   const copyTextBtn = document.getElementById("copy-text-btn");
+  const pinBtn = document.getElementById("pin-btn");
 
   const pasteDialog = document.getElementById("paste-dialog");
   const pasteTextarea = document.getElementById("paste-textarea");
@@ -280,6 +281,10 @@ document.addEventListener("DOMContentLoaded", () => {
         drawErrorPlaceholder(item); // Attempt to draw error placeholder
       }
 
+      if (item.isPinned === true) {
+        drawPinIndicator(item);
+      }
+
       // Draw Owner Nickname & Tags (common to all types, drawn on top)
       drawItemExtras(item);
     });
@@ -299,6 +304,57 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Find the existing drawText function in public/client.js
   // Replace the ENTIRE function with this enhanced version:
+
+  function drawPinIndicator(item) {
+    // Requires valid item position and dimensions
+    if (
+      typeof item.x !== 'number' || typeof item.y !== 'number' ||
+      typeof item.width !== 'number' || typeof item.height !== 'number' ||
+      item.width <= 0 || item.height <= 0
+    ) {
+      return; // Cannot draw indicator without valid geometry
+    }
+
+    const drawX = item.x;
+    const drawY = item.y;
+    // Scale the pin size and offset based on zoom, ensuring minimum visible size
+    const basePinSize = 20; // Base size in screen pixels
+    const minPinSize = 10; // Minimum screen pixels
+    const pinSize = Math.max(minPinSize, basePinSize / Math.sqrt(zoom)); // Scale inversely with sqrt(zoom) for less drastic change
+    const pinOffsetX = 5 / zoom; // Offset from corner in world coords
+    const pinOffsetY = 5 / zoom;
+
+    // Position at top-right corner
+    const indicatorX = drawX + item.width - pinOffsetX - (pinSize / zoom); // Adjust X based on world size of pin
+    const indicatorY = drawY + pinOffsetY;
+
+    // Draw the pin emoji
+    ctx.font = `${pinSize}px Arial`; // Font size in screen pixels
+    ctx.textAlign = 'right'; // Align based on position
+    ctx.textBaseline = 'top';
+    // Add a slight shadow/background for visibility? Optional.
+    // ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    // ctx.fillRect(indicatorX - (2 / zoom), indicatorY - (2 / zoom), (pinSize / zoom) + (4 / zoom), (pinSize / zoom) + (4 / zoom)); // Small background pad
+
+    ctx.fillStyle = '#000000'; // Text color for emoji
+    ctx.fillText('📌', indicatorX + (pinSize / zoom), indicatorY); // Draw emoji
+  }
+
+  socket.on("items-state", (serverItems) => {
+    console.log(`Received updated items state (${serverItems.length} items) from server.`);
+    items = serverItems || []; // Replace local items completely
+    selectedItem = null; // Clear selection
+    draggedItem = null;
+    highlightedItemIDs.clear(); // Clear highlights
+    // Don't clear image cache unless necessary
+    preloadImages(items); // Preload images for the new state
+    redrawCanvas();
+    redrawMinimap();
+    // Reset history? Or keep it? Let's keep history for now.
+    // historyBackStack = [];
+    // historyForwardStack = [];
+    // updateHistoryButtons();
+  });
 
   function drawText(item) {
     const drawX = item.x || 0;
@@ -1081,6 +1137,20 @@ document.addEventListener("DOMContentLoaded", () => {
       // Merge changes - crucial for partial updates (position, tags, etc.)
       Object.assign(items[index], updatedData);
 
+      if (updatedData.hasOwnProperty('isPinned')) {
+        console.log(`Item ${updatedData.id} pin status received: ${updatedData.isPinned}`);
+        // If this item was selected, update the context menu state if it's open
+        // (although it usually closes on action, this is a safety measure)
+        if (isCurrentlySelected && !contextMenu.classList.contains('hidden')) {
+          const isPinned = items[index].isPinned === true;
+          pinBtn.textContent = isPinned ? "📌 Unpin Item" : "📌 Pin Item";
+          deleteBtn.disabled = isPinned;
+          deleteBtn.style.opacity = isPinned ? 0.5 : 1;
+          deleteBtn.style.cursor = isPinned ? 'not-allowed' : 'pointer';
+          deleteBtn.title = isPinned ? "Cannot delete a pinned item" : "Delete this item";
+        }
+      } s
+
       // If the update included image content, ensure it's preloaded
       if (items[index].type === "image" && updatedData.content) {
         preloadImages([items[index]]);
@@ -1123,18 +1193,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("canvas-cleared", () => {
-    console.log("Canvas cleared by server event");
-    items = [];
-    selectedItem = null;
-    draggedItem = null;
-    highlightedItemIDs.clear();
-    Object.keys(imageCache).forEach((key) => delete imageCache[key]); // Clear image cache
-    // Reset view or keep? Keep current view for now.
-    redrawCanvas();
-    redrawMinimap();
-    historyBackStack = []; // Clear history
-    historyForwardStack = [];
-    updateHistoryButtons();
+    console.log("Received canvas-cleared signal. Waiting for items-state...");
+    // --- Do NOT clear items locally here anymore ---
+    // items = [];
+    // selectedItem = null;
+    // draggedItem = null;
+    // highlightedItemIDs.clear();
+    // Object.keys(imageCache).forEach((key) => delete imageCache[key]);
+    // redrawCanvas();
+    // redrawMinimap();
+    // historyBackStack = [];
+    // historyForwardStack = [];
+    // updateHistoryButtons();
+    // --- Instead, wait for the 'items-state' event ---
+    // Optionally show a temporary "Clearing..." message
   });
 
   function resetClientState() {
@@ -1415,6 +1487,21 @@ document.addEventListener("DOMContentLoaded", () => {
     contextMenu.style.left = `${clientX}px`;
     contextMenu.style.top = `${clientY}px`;
     contextMenu.classList.remove("hidden");
+
+    const isPinned = item.isPinned === true;
+    pinBtn.textContent = isPinned ? "📌 Unpin Item" : "📌 Pin Item";
+    pinBtn.title = isPinned ? "Unpin this item so it can be deleted" : "Pin this item to prevent deletion";
+
+    deleteBtn.disabled = isPinned;
+    deleteBtn.title = isPinned ? "Cannot delete a pinned item" : "Delete this item";
+    // Adjust style for disabled state if needed (CSS might handle :disabled)
+    if (isPinned) {
+      deleteBtn.style.opacity = 0.5;
+      deleteBtn.style.cursor = 'not-allowed';
+    } else {
+      deleteBtn.style.opacity = 1;
+      deleteBtn.style.cursor = 'pointer';
+    }
 
     // Toggle visibility of context menu items based on selected item type
     const canDownload =
@@ -1702,7 +1789,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!myUserID) return; // Must be identified
     if (
       confirm(
-        "Are you sure you want to clear the entire canvas for everyone? This cannot be undone."
+        "Are you sure you want to clear the canvas for everyone?\nPinned items will NOT be removed.\nThis cannot be undone for unpinned items."
       )
     ) {
       console.log("Requesting canvas clear...");
@@ -2630,6 +2717,17 @@ document.addEventListener("DOMContentLoaded", () => {
       tagEditorDialog.classList.remove("hidden"); // Show editor modal
       newTagInput.focus();
       hideContextMenu(); // Hide the right-click menu
+    }
+  });
+
+  pinBtn.addEventListener("click", () => {
+    if (selectedItem && myUserID) {
+      console.log(`Requesting toggle pin for item: ${selectedItem.id}`);
+      socket.emit("toggle-pin-item", selectedItem.id);
+      // Optimistic UI update? Maybe wait for server 'item-updated' event is safer
+      // selectedItem.isPinned = !selectedItem.isPinned;
+      // redrawCanvas();
+      hideContextMenu(); // Hide menu after action
     }
   });
 

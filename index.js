@@ -2,7 +2,7 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const fs = require('fs'); // Required for path checking
-const { startServer, cleanupUploads } = require("./server.js"); // Import server functions
+const { startServer, cleanupUploads, saveCanvasState } = require("./server.js"); // Import server functions
 
 let mainWindow;
 
@@ -79,4 +79,13 @@ app.on("activate", () => {
 app.on("will-quit", () => {
   console.log("[Main Process] Application quitting, performing cleanup...");
   cleanupUploads(); // Delete files from the 'uploads' directory
+
+  try {
+    saveCanvasState(); // Call the imported function
+    console.log("[Main Process] Call to saveCanvasState completed.");
+  } catch (err) {
+    console.error("[Main Process] Error calling saveCanvasState during will-quit:", err);
+    // Decide if you want to prevent quitting on error? Usually not.
+    // event.preventDefault(); // Uncomment to prevent quitting if saving fails critically
+  }
 });
