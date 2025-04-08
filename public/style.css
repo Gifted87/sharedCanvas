@@ -57,13 +57,13 @@ body {
   flex-direction: column; /* Stack content vertically (though only one child now) */
   align-items: stretch; /* Stretch content horizontally */
   flex-shrink: 0; /* Prevent toolbar from shrinking in body flex layout */
-  margin: var(--toolbar-margin-y) var(--toolbar-margin-x); /* Outer spacing */
+  margin: 0; /* Outer spacing */
   padding: 0; /* Padding handled by inner content */
   background: var(--glass-bg);
   backdrop-filter: blur(var(--toolbar-blur));
   -webkit-backdrop-filter: blur(var(--toolbar-blur));
   border: 1px solid var(--border-color);
-  border-radius: var(--toolbar-radius);
+  border-radius: 0;
   box-shadow: var(--shadow);
   position: relative;
   z-index: 10; /* Above canvas, below button/modals */

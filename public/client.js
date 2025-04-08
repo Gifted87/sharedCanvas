@@ -188,6 +188,102 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  /**
+ * Determines an appropriate emoji icon for a file based on its mimetype or filename.
+ * Prioritizes mimetype, then falls back to filename extension, then generic mimetypes.
+ * @param {string|null} mimetype The file's MIME type (e.g., 'application/pdf').
+ * @param {string|null} filename The file's original name (e.g., 'report.docx').
+ * @returns {string} An emoji character representing the file type.
+ */
+  function getIconForFile(mimetype, filename) {
+    // Icon Map: Prioritize specific common types
+    const FILE_ICON_MAP = {
+      // MIME Types
+      'application/pdf': '📕',
+      'application/msword': '📘',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📘', // DOCX
+      'application/vnd.ms-excel': '📗',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📗', // XLSX
+      'application/vnd.ms-powerpoint': '📙',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': '📙', // PPTX
+      'application/zip': '📦',
+      'application/x-zip-compressed': '📦',
+      'application/x-rar-compressed': '📦',
+      'application/gzip': '📦',
+      'application/x-tar': '📦',
+      'text/plain': '📄',
+      'text/html': '🌐',
+      'text/css': '🎨',
+      'text/javascript': '📜',
+      'application/json': '{ }',
+      'text/csv': '📊',
+      // Add more specific types as needed...
+
+      // Extensions (fallback) - Keep lowercase
+      'pdf': '📕',
+      'doc': '📘',
+      'docx': '📘',
+      'xls': '📗',
+      'xlsx': '📗',
+      'ppt': '📙',
+      'pptx': '📙',
+      'zip': '📦',
+      'rar': '📦',
+      'gz': '📦',
+      'tar': '📦',
+      'txt': '📄',
+      'html': '🌐',
+      'htm': '🌐',
+      'css': '🎨',
+      'js': '📜',
+      'json': '{ }',
+      'csv': '📊',
+      'log': '📜',
+      'xml': '</>',
+      'md': '📝',
+      'py': '🐍',
+      'java': '☕',
+      'sh': '$',
+      'bat': '⚙️',
+      'sql': '💾',
+      'conf': '⚙️',
+      'ini': '⚙️',
+      'yml': '⚙️',
+      'yaml': '⚙️',
+    };
+
+    const DEFAULT_FILE_ICON = '📎'; // Default: Paperclip
+
+    // 1. Check specific mimetype
+    if (mimetype && FILE_ICON_MAP[mimetype]) {
+      return FILE_ICON_MAP[mimetype];
+    }
+
+    // 2. Check extension if filename provided
+    if (filename) {
+      // Extract extension safely, handling names with no extension or starting with '.'
+      const lastDotIndex = filename.lastIndexOf('.');
+      if (lastDotIndex > 0 && lastDotIndex < filename.length - 1) { // Ensure dot is not first or last char
+        const extension = filename.substring(lastDotIndex + 1).toLowerCase();
+        if (FILE_ICON_MAP[extension]) {
+          return FILE_ICON_MAP[extension];
+        }
+      }
+    }
+
+    // 3. Check generic mimetype categories (as a safety net)
+    if (mimetype) {
+      if (mimetype.startsWith('image/')) return '🖼️'; // Generic Image
+      if (mimetype.startsWith('audio/')) return '🎵'; // Generic Audio
+      if (mimetype.startsWith('video/')) return '🎬'; // Generic Video
+      if (mimetype.startsWith('text/')) return '📄';  // Generic Text Document
+      // Note: application/* is too broad to assign a generic icon other than default
+    }
+
+    return DEFAULT_FILE_ICON; // Fallback to default icon
+  }
+
+
   if (toolbar) { // Check if toolbar element exists
     toolbar.addEventListener('transitionend', (event) => {
       // Only trigger resize when the height-related transition finishes.
@@ -560,47 +656,141 @@ document.addEventListener("DOMContentLoaded", () => {
   function drawFile(item) {
     const drawX = item.x || 0;
     const drawY = item.y || 0;
-    // Ensure dimensions are stored, use defaults if missing
-    const rectWidth = typeof item.width === "number" ? item.width : 120;
-    const rectHeight = typeof item.height === "number" ? item.height : 70;
-    item.width = rectWidth;
-    item.height = rectHeight;
 
-    // Draw background card
-    ctx.fillStyle = "#f0f0f0";
-    ctx.fillRect(drawX, drawY, rectWidth, rectHeight);
-    ctx.strokeStyle = "#b0b0b0";
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(drawX, drawY, rectWidth, rectHeight);
+    // --- Configuration ---
+    const cardWidth = 160; // Width of the card
+    const cardHeight = 85; // Height of the card
+    const cornerRadius = 8; // Rounded corners
+    const padding = 10; // Internal padding
+    const iconAreaWidth = 40; // Space reserved for the icon on the left
+    const baseFontSize = 11; // Base font size for filename (world units)
+    const maxFilenameLines = 2; // Max lines for filename display
 
-    // Draw icon (adjust size based on zoom)
-    const iconSize = Math.max(15, 30 / Math.sqrt(zoom)); // Scale icon size inversely with zoom
-    const fontSize = Math.max(8, 11 / Math.sqrt(zoom)); // Scale font size similarly
+    // Store dimensions on item for hit detection etc.
+    // IMPORTANT: Ensure width/height are set for interactions like clicking/dragging
+    item.width = cardWidth;
+    item.height = cardHeight;
 
-    ctx.fillStyle = "#777";
-    ctx.font = `${iconSize}px Arial`; // Use specific font for icon if available
+    // --- Get Icon ---
+    // Use the helper function, passing mimetype and originalName from the item
+    const icon = getIconForFile(item.mimetype, item.originalName);
+
+    // --- Draw Card Background & Border ---
+    ctx.save(); // Save context state for shadow/styling
+
+    // Card Style - inspired by drawText for consistency
+    ctx.fillStyle = "#ffffff"; // White background
+    ctx.strokeStyle = "#cccccc"; // Border color
+    ctx.lineWidth = 1 / zoom; // Thin border adjusted for zoom
+    ctx.shadowColor = "rgba(0, 0, 0, 0.1)"; // Subtle shadow
+    ctx.shadowBlur = 5 / zoom; // Adjust blur based on zoom
+    ctx.shadowOffsetX = 1 / zoom; // Adjust offset based on zoom
+    ctx.shadowOffsetY = 2 / zoom; // Adjust offset based on zoom
+
+    // Draw rounded rectangle path
+    ctx.beginPath();
+    ctx.moveTo(drawX + cornerRadius, drawY);
+    ctx.lineTo(drawX + cardWidth - cornerRadius, drawY);
+    ctx.arcTo(drawX + cardWidth, drawY, drawX + cardWidth, drawY + cornerRadius, cornerRadius);
+    ctx.lineTo(drawX + cardWidth, drawY + cardHeight - cornerRadius);
+    ctx.arcTo(drawX + cardWidth, drawY + cardHeight, drawX + cardWidth - cornerRadius, drawY + cardHeight, cornerRadius);
+    ctx.lineTo(drawX + cornerRadius, drawY + cardHeight);
+    ctx.arcTo(drawX, drawY + cardHeight, drawX, drawY + cardHeight - cornerRadius, cornerRadius);
+    ctx.lineTo(drawX, drawY + cornerRadius);
+    ctx.arcTo(drawX, drawY, drawX + cornerRadius, drawY, cornerRadius);
+    ctx.closePath();
+
+    ctx.fill(); // Apply background and shadow
+    ctx.shadowColor = "transparent"; // Disable shadow before drawing border
+    ctx.stroke(); // Draw the border
+
+    ctx.restore(); // Restore context state (removes shadow settings)
+
+    // --- Draw Icon ---
+    const baseIconSize = 30; // Base size in world units
+    // Scale icon font size - make it somewhat consistent on screen via sqrt(zoom)
+    const iconFontSize = Math.max(16 / zoom, baseIconSize); // Make icon scale less drastically than world
+    //const iconFontSize = Math.max(16, baseIconSize / Math.sqrt(zoom)); // Alternative scaling
+    ctx.font = `${iconFontSize}px Arial`; // Use scaled font size for emoji
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(
-      "📄",
-      drawX + rectWidth / 2,
-      drawY + rectHeight / 2 - fontSize * 0.5
-    ); // Adjust icon vertical position
+    ctx.fillStyle = "#333333"; // Icon color
+    // Position icon centered vertically, and horizontally within the dedicated icon area
+    ctx.fillText(icon, drawX + padding + iconAreaWidth / 2, drawY + cardHeight / 2);
 
-    // Draw filename
-    ctx.fillStyle = "#333";
+    // --- Draw Filename ---
+    const filename = item.originalName || "file"; // Fallback name
+    const textX = drawX + iconAreaWidth + padding * 1.5; // Start text after icon area + padding
+    const textMaxWidth = cardWidth - iconAreaWidth - padding * 2; // Available width for text
+    // Scale filename font size inversely with sqrt(zoom) for readability
+    const fontSize = Math.max(8, baseFontSize / Math.sqrt(zoom));
+    const lineHeight = fontSize * 1.25; // Line height
+
     ctx.font = `${fontSize}px Arial`;
-    const name = item.originalName || "file";
-    // Basic text truncation
-    const maxLen = Math.floor(rectWidth / (fontSize * 0.6)); // Estimate max characters
-    const displayName =
-      name.length > maxLen ? name.substring(0, maxLen - 3) + "..." : name;
-    ctx.fillText(
-      displayName,
-      drawX + rectWidth / 2,
-      drawY + rectHeight / 2 + fontSize * 1.2
-    ); // Position filename below icon
+    ctx.fillStyle = "#333333"; // Text color
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top"; // Align to top for wrapping logic
+
+    // Simplified text splitting/truncating logic
+    let linesToDraw = [];
+    let remainingText = filename;
+    const avgCharWidth = fontSize * 0.6; // Rough estimate for average char width
+    const maxCharsPerLine = Math.max(5, Math.floor(textMaxWidth / avgCharWidth));
+
+    for (let i = 0; i < maxFilenameLines; i++) {
+      if (!remainingText) break;
+
+      let line;
+      let splitIndex = Math.min(remainingText.length, maxCharsPerLine);
+      let lastSpaceIndex = remainingText.substring(0, splitIndex).lastIndexOf(' ');
+
+      // If it's the last allowed line and there's more text than fits
+      if (i === maxFilenameLines - 1 && remainingText.length > maxCharsPerLine) {
+        // Try to break at last space if sensible, otherwise force break
+        if (lastSpaceIndex > 0 && remainingText.substring(0, lastSpaceIndex).trim().length > 0) {
+          line = remainingText.substring(0, lastSpaceIndex).trim() + '…';
+        } else { // Force break at char limit - 1
+          line = remainingText.substring(0, maxCharsPerLine - 1) + '…';
+        }
+        linesToDraw.push(line);
+        break; // Finished
+      }
+      // Not the last line, or it fits on the last line
+      else {
+        // If the whole remaining text fits within the max width based on actual measurement
+        if (ctx.measureText(remainingText).width <= textMaxWidth) {
+          line = remainingText;
+          remainingText = ''; // No more text left
+        }
+        // Try word break based on space
+        else if (lastSpaceIndex > 0 && remainingText.substring(0, lastSpaceIndex).trim().length > 0) {
+          line = remainingText.substring(0, lastSpaceIndex).trim();
+          remainingText = remainingText.substring(lastSpaceIndex + 1); // Skip space for next line
+        }
+        // Force break at char limit if no suitable space found or word is too long
+        else {
+          line = remainingText.substring(0, maxCharsPerLine);
+          remainingText = remainingText.substring(maxCharsPerLine);
+        }
+        linesToDraw.push(line);
+      }
+    }
+
+    // Calculate starting Y to center the text block vertically
+    const totalTextHeight = linesToDraw.length * lineHeight;
+    const startYText = drawY + (cardHeight - totalTextHeight) / 2;
+
+    // Draw the calculated lines
+    linesToDraw.forEach((line, index) => {
+      ctx.fillText(line, textX, startYText + index * lineHeight);
+    });
+
+    // --- Draw Item Extras (Nickname, Tags) ---
+    // Call the existing function to draw owner/tags below the card
+    // Ensure drawItemExtras uses item.height correctly.
+    drawItemExtras(item);
   }
+
 
   function drawLoadingPlaceholder(item) {
     const drawX = item.x || 0;
