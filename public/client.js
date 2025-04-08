@@ -125,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const HISTORY_DEBOUNCE = 1000; // ms to wait before recording stable view
   let historyTimeout = null; // Timer for debouncing history recording
 
-  let isSnapEnabled = false; // Flag: grid snap enabled
+  let isSnapEnabled = true; // Flag: grid snap enabled
   const GRID_SIZE = 20; // Size of grid cells in world units
 
   // --- Initial Setup ---
@@ -219,15 +219,17 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillStyle = "#e9e9e9"; // Background
     ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-    // Optional: Draw Grid if enabled
-    if (isSnapEnabled) {
-      drawGrid(cssWidth, cssHeight);
-    }
+
 
     // Apply viewport transformations (pan and zoom)
     ctx.translate(offsetX, offsetY);
     ctx.scale(zoom, zoom);
 
+    // Optional: Draw Grid if enabled (NOW USES THE TRANSFORMED CONTEXT)
+    if (isSnapEnabled) {
+      // Pass the original screen dimensions for calculating world bounds
+      drawGrid(cssWidth, cssHeight); // <<-- ADD THE CALL HERE
+    }
     // --- Draw Items ---
     items.forEach((item) => {
       const drawX = item.x || 0;
@@ -704,37 +706,56 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Draw Grid ---
+  // --- Draw Grid ---
   function drawGrid(cssWidth, cssHeight) {
-    // cssWidth, cssHeight are the logical dimensions of the canvas
-
     ctx.save(); // Save context state before drawing grid
 
     const worldTopLeft = screenToWorld(0, 0);
     const worldBottomRight = screenToWorld(cssWidth, cssHeight);
 
+    // Define a buffer around the viewport in world units (e.g., 10 grid cells)
+    // This pre-draws lines that are about to come into view when panning.
+    const buffer = GRID_SIZE * 10;
+
+    // Calculate the bounds of the expanded area (viewport + buffer)
+    const expandedTopLeftX = worldTopLeft.x - buffer;
+    const expandedTopLeftY = worldTopLeft.y - buffer;
+    const expandedBottomRightX = worldBottomRight.x + buffer;
+    const expandedBottomRightY = worldBottomRight.y + buffer;
+
     ctx.strokeStyle = "rgba(0, 0, 0, 0.08)"; // Lighter grid lines
     ctx.lineWidth = 1 / zoom; // Make lines appear 1px wide regardless of zoom
 
-    // Calculate grid start points aligned to GRID_SIZE
-    const startX = Math.floor(worldTopLeft.x / GRID_SIZE) * GRID_SIZE;
-    const endX = Math.ceil(worldBottomRight.x / GRID_SIZE) * GRID_SIZE;
-    const startY = Math.floor(worldTopLeft.y / GRID_SIZE) * GRID_SIZE;
-    const endY = Math.ceil(worldBottomRight.y / GRID_SIZE) * GRID_SIZE;
+    // Calculate grid start/end points aligned to GRID_SIZE based on the EXPANDED view
+    const startX = Math.floor(expandedTopLeftX / GRID_SIZE) * GRID_SIZE;
+    const endX = Math.ceil(expandedBottomRightX / GRID_SIZE) * GRID_SIZE;
+    const startY = Math.floor(expandedTopLeftY / GRID_SIZE) * GRID_SIZE;
+    const endY = Math.ceil(expandedBottomRightY / GRID_SIZE) * GRID_SIZE;
 
-    // Draw vertical lines (in world coordinates, they will be transformed by ctx)
-    for (let x = startX; x <= endX; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, startY); // Use world Y range for line length
-      ctx.lineTo(x, endY);
-      ctx.stroke();
+    // Performance safeguard: Limit the number of lines drawn in each direction
+    const maxLines = 200; // Adjust if necessary
+    let verticalLinesDrawn = 0;
+    let horizontalLinesDrawn = 0;
+
+    // Begin path for all grid lines (potential minor optimization)
+    ctx.beginPath();
+
+    // Draw vertical lines within the expanded range
+    for (let x = startX; x <= endX && verticalLinesDrawn < maxLines; x += GRID_SIZE) {
+      ctx.moveTo(x, startY); // Line starts at the top of the expanded range
+      ctx.lineTo(x, endY);   // Line ends at the bottom of the expanded range
+      verticalLinesDrawn++;
     }
-    // Draw horizontal lines
-    for (let y = startY; y <= endY; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(startX, y); // Use world X range for line length
-      ctx.lineTo(endX, y);
-      ctx.stroke();
+
+    // Draw horizontal lines within the expanded range
+    for (let y = startY; y <= endY && horizontalLinesDrawn < maxLines; y += GRID_SIZE) {
+      ctx.moveTo(startX, y); // Line starts at the left of the expanded range
+      ctx.lineTo(endX, y);   // Line ends at the right of the expanded range
+      horizontalLinesDrawn++;
     }
+
+    // Stroke all the lines added to the path at once
+    ctx.stroke();
 
     ctx.restore(); // Restore context state
   }
