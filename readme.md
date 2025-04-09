@@ -221,10 +221,4 @@ We welcome contributions to improve **Shared Canvas Host**! Here’s how you can
 
 ---
 
-## License
-
-This project is licensed under the **MIT License**. You are free to use, modify, and distribute this software, provided that the original license is included.
-
----
-
 Thank you for using **Shared Canvas Host**! If you have any questions or feedback, feel free to reach out or open an issue on GitHub. Happy collaborating! 🎨
