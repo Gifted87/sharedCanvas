@@ -1,5 +1,8 @@
-Welcome to **Shared Canvas Host**, a collaborative canvas application designed to enable real-time sharing and interaction across multiple devices on the same local network. This app is built using **Electron**, **Node.js**, and **Socket.IO**, and provides a seamless experience for sharing files, images, text, and more in a shared workspace.
+How many minutes do you waste emailing yourself stuff, switching tabs, or digging through chats just to find that ‘one file’ you sent to yourself yesterday?”
+What if you could skip all of that... forever?”
 
+Shared Canvas – Your Universal Clipboard and File Drop for All Devices.
+A dead-simple app that connects your phone, your laptop, your tablet, and even your work PC into one seamless, synced workspace — with no cloud, no login, and no stress.
 ---
 
 ## Table of Contents
