@@ -1,0 +1,851 @@
+/* public/style.css */
+/* Basic Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden; /* Prevent scrolling on the body */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  background-color: #f4f4f4; /* Light gray background */
+}
+
+body {
+  display: flex;
+  flex-direction: column; /* Arrange toolbar above canvas */
+  height: 100%; /* Ensure body takes full height */
+}
+
+/* --- CSS Variables --- */
+:root {
+  --primary: #6366f1; /* Indigo */
+  --primary-hover: #4f46e5; /* Darker Indigo */
+  --primary-light: #a5b4fc; /* Lighter Indigo */
+  --secondary: #f4f4f5; /* Light Gray */
+  --secondary-hover: #e4e4e7; /* Slightly Darker Gray */
+  --text-primary: #1f2937; /* Dark Gray Text */
+  --text-secondary: #6b7280; /* Medium Gray Text */
+  --border-color: rgba(255, 255, 255, 0.3);
+  --glass-bg: rgba(255, 255, 255, 0.65); /* White glass */
+  --glass-bg-darker: rgba(245, 245, 245, 0.75); /* Slightly less transparent */
+  --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2); /* Softer shadow */
+  --toolbar-blur: 8px;
+  --toolbar-radius: 16px; /* Rounded corners */
+  --toolbar-padding-y: 10px;
+  --toolbar-padding-x: 20px;
+  --toolbar-margin-y: 12px;
+  --toolbar-margin-x: 16px;
+  --element-radius: 8px; /* Radius for buttons/inputs */
+  --element-padding-y: 8px;
+  --element-padding-x: 14px;
+  --element-gap: 10px; /* Gap between elements */
+  --transition-speed: 0.2s;
+  --background: #f8fafc; /* Canvas background */
+}
+
+/* --- Toolbar Styling --- */
+/* #toolbar-container styles are removed */
+
+#toolbar {
+  /* Structure & Base Appearance */
+  display: flex; /* Use flex for content alignment */
+  flex-direction: column; /* Stack content vertically (though only one child now) */
+  align-items: stretch; /* Stretch content horizontally */
+  flex-shrink: 0; /* Prevent toolbar from shrinking in body flex layout */
+  margin: 0; /* Outer spacing */
+  padding: 0; /* Padding handled by inner content */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--toolbar-blur));
+  -webkit-backdrop-filter: blur(var(--toolbar-blur));
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 10; /* Above canvas, below button/modals */
+  overflow: hidden; /* Clip content during animation */
+
+  /* Expand/Collapse Animation */
+  max-height: 500px; /* Max expanded height */
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-width 0.3s linear 0.1s,
+    /* Delay border transition slightly */ visibility 0s linear 0s,
+    /* Be visible immediately when expanding */ opacity 0.3s ease 0.1s; /* Fade in slightly delayed */
+  visibility: visible;
+  opacity: 1;
+  padding-top: 20px;;
+}
+
+/* Collapsed State */
+#toolbar.collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  border-width: 0;
+  opacity: 0; /* Fade out */
+  /* Hide from layout and accessibility tree */
+  visibility: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-width 0.3s linear,
+    visibility 0s linear 0.4s, /* Hide after animation */ opacity 0.3s ease; /* Fade out */
+  /* No need for background/shadow/blur when hidden */
+}
+
+/* Toolbar Content Area (Inside #toolbar) */
+.toolbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--element-gap);
+  padding: var(--toolbar-padding-y) var(--toolbar-padding-x);
+  width: 100%;
+  /* Content fades with toolbar */
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+#toolbar.collapsed .toolbar-content {
+  opacity: 0; /* Fade content faster than toolbar collapse */
+  transition: opacity 0.2s ease;
+}
+
+/* --- Toggle Button (Fixed Position) --- */
+.toolbar-tab {
+  /* This corresponds to #toolbar-toggle-btn */
+  /* --- Positioning --- */
+  position: fixed; /* Relative to viewport */
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0px; /* Distance from bottom edge */
+  z-index: 100; /* Ensure it's above canvas/toolbar/minimap */
+
+  /* --- Appearance --- */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.4); /* Slightly more opaque */
+  border: 1px solid rgba(0, 0, 0, 0.1); /* Subtle border */
+  border-radius: 0px 0px 8px 8px; /* Rounded */
+  cursor: pointer;
+  transition: background-color var(--transition-speed) ease,
+    box-shadow var(--transition-speed) ease;
+  padding: 0;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2); /* Slightly stronger shadow */
+}
+.toolbar-tab:hover {
+  background-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Icon default state and transition (depends on button's class) */
+.toolbar-tab .icon {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  transform: rotate(0deg); /* Default: Pointing up (Hide) */
+  transition: transform var(--transition-speed) ease;
+}
+.toolbar-tab.collapsed .icon {
+  transform: rotate(180deg); /* Collapsed: Pointing down (Show) */
+}
+
+/* --- Styles for elements INSIDE .toolbar-content --- */
+
+/* Styling for logical groups within the toolbar content */
+.toolbar-content .toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--element-gap);
+}
+.toolbar-content .toolbar-group.search-group {
+  flex-grow: 1;
+  justify-content: center;
+  min-width: 250px;
+  background: var(--glass-bg-darker);
+  padding: 4px 10px;
+  border-radius: var(--element-radius);
+  border: 1px solid var(--border-color);
+}
+.toolbar-content .toolbar-group.info-group {
+  margin-left: auto;
+}
+.toolbar-content button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--element-padding-y) var(--element-padding-x);
+  font-size: 0.95em;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: linear-gradient(145deg, var(--secondary), var(--secondary-hover));
+  border: none;
+  border-radius: var(--element-radius);
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
+}
+.toolbar-content button .icon {
+  font-size: 1.1em;
+  display: inline-block;
+}
+.toolbar-content button#clear-canvas-btn {
+  background: linear-gradient(145deg, #fecaca, #f87171);
+  color: #991b1b;
+  box-shadow: 0 3px 6px rgba(220, 38, 38, 0.2);
+}
+.toolbar-content button#clear-canvas-btn:hover {
+  background: linear-gradient(145deg, #fca5a5, #ef4444);
+  color: #7f1d1d;
+}
+.toolbar-content button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.toolbar-content button:active:not(:disabled) {
+  transform: translateY(0px);
+  filter: brightness(0.95);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.toolbar-content button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+  background: var(--secondary-hover);
+}
+.toolbar-content input[type="search"] {
+  flex-grow: 1;
+  padding: var(--element-padding-y) 10px;
+  font-size: 0.95em;
+  color: var(--text-primary);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--element-radius);
+  outline: none;
+  transition: all var(--transition-speed) ease;
+}
+.toolbar-content .search-group .search-icon {
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.toolbar-content select {
+  padding: var(--element-padding-y) var(--element-padding-x);
+  font-size: 0.95em;
+  color: var(--text-primary);
+  background-color: var(--secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--element-radius);
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--element-padding-x) center;
+  background-size: 1em 1em;
+  padding-right: calc(var(--element-padding-x) * 2 + 1em);
+}
+.toolbar-content select:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background-color: var(--secondary-hover);
+}
+.toolbar-content span#user-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--element-padding-y) var(--element-padding-x);
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  background-color: var(--glass-bg-darker);
+  border-radius: var(--element-radius);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+.toolbar-content span#user-count .icon {
+  font-size: 1.2em;
+  color: var(--primary);
+}
+/* --- End Toolbar Content Styles --- */
+
+/* --- QR Code Container Styling --- */
+#qr-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 20px;
+  border: 1px solid #ccc;
+  box-shadow: 3px 3px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  z-index: 110; /* Above fixed button */
+  text-align: center;
+  max-width: 300px;
+}
+#qr-container img {
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 10px;
+}
+#qr-container p {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 15px;
+  word-wrap: break-word;
+}
+#qr-container button#qr-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #eee;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  color: #555;
+}
+#qr-container button#qr-close-btn:hover {
+  background: #ddd;
+  color: #000;
+}
+
+/* --- Canvas Styling --- */
+#canvas {
+  cursor: crosshair;
+  flex-grow: 1; /* Takes remaining space in the body's flex column */
+  display: block;
+  width: 100%;
+  /* height: 100%; Important for layout size */
+  background-color: var(--background);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* --- Minimap Canvas Styling --- */
+#minimap-canvas {
+  position: fixed;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  bottom: 24px;
+  right: 24px;
+  width: 150px;
+  height: 100px;
+  z-index: 90; /* Below fixed button */
+  cursor: pointer;
+}
+
+/* --- Loading Indicator Styling --- */
+#loading-indicator {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 25px;
+  border-radius: 20px;
+  z-index: 101; /* Above fixed button */
+  font-size: 0.9em;
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* --- Context Menu Styling --- */
+#context-menu {
+  position: absolute;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 1000; /* Above everything else */
+  padding: 5px 0;
+  min-width: 160px;
+}
+#context-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95em;
+  color: var(--text-primary);
+  transition: all var(--transition-speed) ease;
+}
+#context-menu button:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: var(--primary);
+}
+#context-menu button#download-btn.hidden,
+#context-menu button#copy-text-btn.hidden {
+  display: none;
+}
+
+/* --- Modal Dialog Styling (General) --- */
+.modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+}
+.modal-content {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--toolbar-radius);
+  box-shadow: var(--shadow);
+  padding: 30px 35px;
+  min-width: 320px;
+  max-width: 550px;
+  width: 90%;
+  text-align: center;
+  animation: modalEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 25px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.modal-content input[type="text"],
+.modal-content input[type="search"],
+.modal-content textarea {
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 12px 15px;
+  border: 1px solid var(--border-color);
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: var(--element-radius);
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--text-primary);
+  transition: all var(--transition-speed) ease;
+}
+.modal-content input[type="text"]:focus,
+.modal-content input[type="search"]:focus,
+.modal-content textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+.modal-content textarea {
+  resize: vertical;
+  min-height: 90px;
+  text-align: left;
+}
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 25px;
+}
+.modal-buttons button {
+  padding: 10px 20px;
+  border-radius: var(--element-radius);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+  background-color: var(--glass-bg-darker);
+  color: var(--text-primary);
+}
+.modal-buttons button:hover {
+  filter: brightness(1.1);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Specific Modal Styles */
+#nickname-dialog .nickname-modal-content button {
+  width: auto;
+  padding: 1.5em;
+  border-radius: 5px;
+  margin-top: 15px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: white;
+  border: none !important;
+  box-shadow: 0 3px 6px rgba(99, 102, 241, 0.3);
+}
+#nickname-dialog .nickname-modal-content button:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
+}
+#paste-dialog-add-btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: white;
+  border: none !important;
+  box-shadow: 0 3px 6px rgba(99, 102, 241, 0.3);
+}
+#paste-dialog-add-btn:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
+}
+#paste-dialog-cancel-btn {
+  background-color: transparent;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+}
+#paste-dialog-cancel-btn:hover {
+  background-color: var(--secondary-hover);
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  filter: none;
+}
+#tag-editor-dialog .modal-content {
+  text-align: left;
+}
+#current-tags-container {
+  margin-bottom: 20px;
+  min-height: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--primary-light);
+  color: var(--primary-hover);
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+.tag-pill button {
+  background: none;
+  border: none;
+  color: var(--primary-hover);
+  margin-left: 6px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.7;
+}
+.tag-pill button:hover {
+  opacity: 1;
+  color: #dc3545;
+}
+#add-tag-btn {
+  padding: 6px 12px;
+  margin-left: 8px;
+  border-radius: var(--element-radius);
+  background: var(--secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-speed) ease;
+}
+#add-tag-btn:hover {
+  background: var(--secondary-hover);
+  border-color: var(--primary);
+}
+#tag-editor-done-btn {
+  background: linear-gradient(135deg, #28a745, #218838);
+  color: white;
+  border: none !important;
+  box-shadow: 0 3px 6px rgba(40, 167, 69, 0.3);
+}
+#tag-editor-done-btn:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+/* --- Utility Classes --- */
+.hidden {
+  display: none !important;
+}
+.error-message {
+  color: #dc3545;
+  font-size: 0.9em;
+  margin-top: 10px;
+  min-height: 1.2em;
+  text-align: center;
+}
+
+/* --- Upload Progress Styling --- */
+#upload-progress-container {
+  position: fixed;
+  bottom: 15px;
+  left: 15px;
+  width: 280px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: rgba(60, 60, 60, 0.85);
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.upload-progress-item {
+  background-color: #ffffff;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 0.85em;
+  color: #333;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease, opacity 0.5s ease;
+  opacity: 1;
+}
+.upload-progress-item .filename {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-bottom: 5px;
+  color: #111;
+}
+.upload-progress-item .progress-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.upload-progress-item .progress-bar-container {
+  flex-grow: 1;
+  height: 10px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.upload-progress-item .progress-bar {
+  height: 100%;
+  width: 0%;
+  background-color: #007bff;
+  border-radius: 5px;
+  transition: width 0.15s linear;
+}
+.upload-progress-item .progress-text {
+  font-size: 0.9em;
+  min-width: 40px;
+  text-align: right;
+  color: #555;
+}
+.upload-progress-item.processing .progress-text {
+  color: #6c757d;
+}
+.upload-progress-item.processing .progress-bar {
+  background-color: #ffc107;
+  width: 100%;
+}
+.upload-progress-item.completed {
+  background-color: #e9f7ec;
+  border-left: 4px solid #28a745;
+}
+.upload-progress-item.completed .progress-text {
+  color: #155724;
+}
+.upload-progress-item.completed .progress-bar {
+  background-color: #28a745;
+  width: 100%;
+}
+.upload-progress-item.error {
+  background-color: #fbeaef;
+  border-left: 4px solid #dc3545;
+}
+.upload-progress-item.error .filename {
+  color: #721c24;
+}
+.upload-progress-item.error .progress-text {
+  color: #721c24;
+}
+.upload-progress-item.error .progress-bar {
+  background-color: #dc3545;
+  width: 100%;
+}
+.upload-progress-item.fade-out {
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+#upload-progress-container.hidden {
+  display: none !important;
+}
+
+/* --- Reconnecting Indicator Styling --- */
+#reconnecting-indicator {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(255, 193, 7, 0.9);
+  color: #333;
+  padding: 10px 20px;
+  border-radius: 5px;
+  z-index: 1100;
+  font-size: 0.95em;
+  box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+#reconnecting-indicator.hidden {
+  display: none !important;
+}
+
+/* Optional: Style to disable interactions while disconnected */
+body.disconnected {
+  pointer-events: none;
+}
+body.disconnected #nickname-dialog,
+body.disconnected #reconnecting-indicator,
+body.disconnected .toolbar-tab {
+  pointer-events: auto; /* Re-enable pointer events for nickname, indicator, and toggle button */
+}
+
+
+/* --- Mobile Toolbar Adjustments --- */
+@media (max-width: 768px) {
+  :root {
+      /* Reduce global padding/gap variables specifically for mobile */
+      --toolbar-padding-y: 8px;   /* Less vertical padding in the toolbar */
+      --toolbar-padding-x: 10px;  /* Less horizontal padding in the toolbar */
+      --element-padding-y: 6px;   /* Less vertical padding for buttons/inputs */
+      --element-padding-x: 10px;  /* Less horizontal padding for buttons/inputs */
+      --element-gap: 8px;       /* Smaller gap between elements */
+  }
+
+  /* Apply reduced padding directly to toolbar content */
+  .toolbar-content {
+      padding: var(--toolbar-padding-y) var(--toolbar-padding-x);
+      justify-content: center; /* Center items better when they wrap */
+      /* You could also use flex-start if preferred */
+  }
+
+  /* Reduce base font size for most toolbar elements */
+  .toolbar-content button,
+  .toolbar-content select,
+  .toolbar-content span#user-count {
+      font-size: 0.85em; /* Smaller text */
+      padding: var(--element-padding-y) var(--element-padding-x); /* Apply smaller padding */
+  }
+
+  /* Keep search input readable but adjust padding */
+  .toolbar-content input[type="search"] {
+      font-size: 0.9em;
+      padding: var(--element-padding-y) 8px;
+  }
+
+  /* Adjust select dropdown arrow position due to padding change */
+  .toolbar-content select {
+       padding-right: calc(var(--element-padding-x) * 2 + 0.8em); /* Recalculate right padding */
+       background-position: right var(--element-padding-x) center;
+       background-size: 0.8em 0.8em; /* Slightly smaller arrow */
+  }
+
+  .toolbar-content .toolbar-group {
+    /* Allow groups to shrink if space is tight */
+    flex-shrink: 1;
+    /* Ensure they wrap onto the next line */
+    flex-basis: auto; /* Allow natural wrapping based on content */
+}
+
+/* Make the search group smaller and more flexible */
+.toolbar-content .toolbar-group.search-group {
+    min-width: 120px;    /* Allow it to get narrower */
+    flex-grow: 1;        /* Keep growing if space allows */
+    flex-shrink: 1;      /* Ensure it shrinks */
+    padding: 2px 8px;    /* Tighter padding */
+    order: 5;            /* Optional: Move search towards the end on mobile */
+}
+
+/* Ensure search input itself can shrink */
+ .toolbar-content input[type="search"] {
+    min-width: 80px; /* Prevent it becoming unusable */
+ }
+
+/* Remove the auto margin pushing the info group right when centered */
+.toolbar-content .toolbar-group.info-group {
+    margin-left: 0;
+}
+
+/* Optional: Change order of groups if desired */
+/* Example: Move View group earlier */
+/* .toolbar-content .toolbar-group:nth-child(3) { order: 1; } */
+/* .toolbar-content .toolbar-group:nth-child(1) { order: 2; } */
+/* etc. */
+
+/* Make buttons smaller, especially icon-heavy ones */
+.toolbar-content button {
+  min-width: auto; /* Remove fixed min-width if any was set */
+}
+
+/* Specific tighter padding for icon-centric buttons */
+#zoom-in-btn,
+#zoom-out-btn,
+#history-back-btn,
+#history-forward-btn {
+   padding-left: 8px;
+   padding-right: 8px;
+}
+
+/* Slightly more padding for buttons where text is more important */
+#upload-btn,
+#paste-btn,
+#clear-canvas-btn,
+#zoom-fit-btn,
+#save-view-btn,
+#qr-toggle-btn {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* Optionally make icons slightly more prominent on smaller buttons */
+/* .toolbar-content button .icon {
+  font-size: 1.2em;
+} */
+}
+
+/* Add to style.css */
+.help-text {
+  white-space: pre-wrap;
+  text-align: left;
+  font-family: monospace;
+  line-height: 1.4;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  max-width: 600px;
+  margin: 20px auto;
+}

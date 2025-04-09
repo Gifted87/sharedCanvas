@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Shared Canvas</title>
+    <!-- Updated Title -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+    <!-- Link to the stylesheet -->
+  </head>
+  <body>
+    <button id="toolbar-toggle-btn" class="toolbar-tab" title="Hide Toolbar">
+        <span class="icon">🔼</span>
+      </button>
+    <!-- Nickname Modal (Initially Hidden, covers everything) -->
+    <div id="nickname-dialog" class="modal">
+      <!-- Initially visible until hidden by JS -->
+      <div class="modal-content nickname-modal-content">
+        <!-- Added specific class -->
+        <h3>Enter the name of this device:</h3>
+        <input
+          type="text"
+          id="nickname-input"
+          placeholder="Your Name"
+          autofocus
+          autocomplete="off"
+        />
+        <button id="nickname-submit-btn">Join Canvas</button>
+        <p id="nickname-error" class="error-message hidden"></p>
+        <!-- For potential errors -->
+      </div>
+    </div>
+
+    <!-- Toolbar at the top -->
+    <div id="toolbar">
+      <div style="text-align: center; font-family: 'Courier New', Courier, monospace; font-size:0.7em; margin-top: 3px;">Made with 💖 by Gift Braimah </div>
+        <div class="toolbar-content">
+          <!-- All toolbar groups go here... -->
+          <!-- Group 1: File/Content Actions -->
+          <div class="toolbar-group">
+            <button id="upload-btn" title="Upload File"><span class="icon">📁</span> Upload</button>
+            <input type="file" id="file-input" hidden multiple />
+            <button id="paste-btn" title="Paste Text"><span class="icon">📝</span> Paste</button>
+            <button id="clear-canvas-btn" title="Clear Canvas"><span class="icon">🗑️</span> Clear All</button>
+          </div>
+          <!-- Group 2: Search & Filter -->
+          <div class="toolbar-group search-group" style="display: none;">
+             <span class="icon search-icon">🔍</span>
+             <input type="search" id="search-input" placeholder="Search content..." />
+             <button id="filter-type-btn" title="Filter by Type" style="display: none">Type</button>
+             <button id="filter-date-btn" title="Filter by Date" style="display: none">Date</button>
+             <button id="filter-tag-btn" title="Filter by Tag" style="display: none">Tag</button>
+          </div>
+          <!-- Group 3: View & Navigation -->
+          <div class="toolbar-group">
+            <button id="zoom-in-btn" title="Zoom In"><span class="icon">+</span></button>
+            <button id="zoom-out-btn" title="Zoom Out"><span class="icon">-</span></button>
+            <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
+            <button id="history-back-btn" title="Navigate Back" disabled><span class="icon">←</span></button>
+            <button id="history-forward-btn" title="Navigate Forward" disabled><span class="icon">→</span></button>
+          </div>
+          <!-- Group 4: Bookmarks -->
+          <div class="toolbar-group">
+             <button id="save-view-btn" title="Save Current View"><span class="icon">💾</span> Save this Section</button>
+             <select id="bookmarks-list" title="Go to Bookmark">
+               <option value="">Saved Sections</option>
+             </select>
+          </div>
+          <!-- Group 5: Info & Settings (Right Aligned) -->
+          <div class="toolbar-group info-group">
+            <button id="qr-toggle-btn" title="Show/Hide QR Code"><span class="icon">🔗</span> Connect</button>
+            <span id="user-count" title="Connected Users"><span class="icon">👥</span> ?</span>
+            <button id="grid-snap-toggle" title="Toggle Grid Snap" style="display: none;">Grid</button>
+          </div>
+        </div> <!-- End .toolbar-content -->
+      </div> <!-- End #toolbar -->
+
+    <!-- Container for the QR Code (initially hidden) -->
+    <div id="qr-container" class="hidden">
+      <img id="qr-code-img" src="" alt="QR Code Loading..." />
+      <p>Connect via WiFi then scan or visit: <span id="server-url"></span></p>
+      <button id="qr-close-btn" title="Close QR Code">X</button>
+    </div>
+
+    <!-- The main canvas area -->
+    <canvas id="canvas" tabindex="0"></canvas>
+    <!-- tabindex important for focus/paste -->
+
+    <!-- Minimap Canvas (Positioned via CSS) -->
+    <canvas id="minimap-canvas"></canvas>
+
+    <!-- Loading indicator shown during file uploads -->
+    <div id="loading-indicator" class="hidden">Uploading...</div>
+
+    <!-- Context menu for item actions (e.g., delete), initially hidden -->
+    <div id="context-menu" class="hidden">
+      <button id="pin-btn">Pin Item</button> 
+      <button id="delete-btn">Delete Item</button>
+      <button id="download-btn" class="hidden">Download File</button>
+      <!-- Placeholder for Tag editing action -->
+      <button id="edit-tags-btn">Edit Tags</button>
+      <button id="copy-text-btn" class="hidden">Copy Text</button>
+      <!-- Added -->
+    </div>
+
+    <!-- Paste Text Dialog (initially hidden) -->
+    <div id="paste-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3>Paste Text</h3>
+        <textarea
+          id="paste-textarea"
+          rows="6"
+          placeholder="Paste your text here..."
+        ></textarea>
+        <div class="modal-buttons">
+          <button id="paste-dialog-add-btn">Add to Canvas</button>
+          <button id="paste-dialog-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tag Editor Modal (placeholder - initially hidden) -->
+    <div id="tag-editor-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3 id="tag-editor-title">Edit Tags for Item</h3>
+        <!-- Tag display and input elements go here -->
+        <div id="current-tags-container"></div>
+        <input type="text" id="new-tag-input" placeholder="Add a tag..." />
+        <button id="add-tag-btn">Add Tag</button>
+        <div class="modal-buttons">
+          <button id="tag-editor-done-btn">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="reconnecting-indicator" class="hidden">
+      <p>Connection lost. Attempting to reconnect...</p>
+    </div>
+
+    <!-- Container for Upload Progress Indicators -->
+    <div id="upload-progress-container" class="hidden">
+      <!-- Progress items will be added here dynamically by client.js -->
+    </div>
+
+    <!-- Bookmark Save Dialog (initially hidden) -->
+    <div id="bookmark-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3>Save Current View</h3>
+        <input type="text" id="bookmark-name-input" placeholder="Name this section" autocomplete="off" />
+        <p id="bookmark-error" class="error-message hidden"></p> <!-- Error message area -->
+        <div class="modal-buttons">
+          <button id="bookmark-save-btn">Save Section</button>
+          <button id="bookmark-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    
+
+    
+
+    <!-- Load Socket.IO client library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Load your custom client-side JavaScript -->
+    <script src="client.js"></script>
+  </body>
+</html>
