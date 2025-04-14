@@ -10,8 +10,8 @@
   </head>
   <body>
     <button id="toolbar-toggle-btn" class="toolbar-tab" title="Hide Toolbar">
-        <span class="icon">🔼</span>
-      </button>
+      <span class="icon">🔼</span>
+    </button>
     <!-- Nickname Modal (Initially Hidden, covers everything) -->
     <div id="nickname-dialog" class="modal">
       <!-- Initially visible until hidden by JS -->
@@ -33,46 +33,96 @@
 
     <!-- Toolbar at the top -->
     <div id="toolbar">
-        <div class="toolbar-content">
-          <!-- All toolbar groups go here... -->
-          <!-- Group 1: File/Content Actions -->
-          <div class="toolbar-group">
-            <button id="upload-btn" title="Upload File"><span class="icon">📁</span> Upload</button>
-            <input type="file" id="file-input" hidden multiple />
-            <button id="paste-btn" title="Paste Text"><span class="icon">📝</span> Paste</button>
-            <button id="clear-canvas-btn" title="Clear Canvas"><span class="icon">🗑️</span> Clear All</button>
-          </div>
-          <!-- Group 2: Search & Filter -->
-          <div class="toolbar-group search-group" style="display: none;">
-             <span class="icon search-icon">🔍</span>
-             <input type="search" id="search-input" placeholder="Search content..." />
-             <button id="filter-type-btn" title="Filter by Type" style="display: none">Type</button>
-             <button id="filter-date-btn" title="Filter by Date" style="display: none">Date</button>
-             <button id="filter-tag-btn" title="Filter by Tag" style="display: none">Tag</button>
-          </div>
-          <!-- Group 3: View & Navigation -->
-          <div class="toolbar-group">
-            <button id="zoom-in-btn" title="Zoom In"><span class="icon">+</span></button>
-            <button id="zoom-out-btn" title="Zoom Out"><span class="icon">-</span></button>
-            <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
-            <button id="history-back-btn" title="Navigate Back" disabled><span class="icon">←</span></button>
-            <button id="history-forward-btn" title="Navigate Forward" disabled><span class="icon">→</span></button>
-          </div>
-          <!-- Group 4: Bookmarks -->
-          <div class="toolbar-group">
-             <button id="save-view-btn" title="Save Current View"><span class="icon">💾</span> Save this Section</button>
-             <select id="bookmarks-list" title="Go to Bookmark">
-               <option value="">Saved Sections</option>
-             </select>
-          </div>
-          <!-- Group 5: Info & Settings (Right Aligned) -->
-          <div class="toolbar-group info-group">
-            <button id="qr-toggle-btn" title="Show/Hide QR Code"><span class="icon">🔗</span> Connect</button>
-            <span id="user-count" title="Connected Users"><span class="icon">👥</span> ?</span>
-            <button id="grid-snap-toggle" title="Toggle Grid Snap" style="display: none;">Grid</button>
-          </div>
-        </div> <!-- End .toolbar-content -->
-      </div> <!-- End #toolbar -->
+      <div class="toolbar-content">
+        <!-- All toolbar groups go here... -->
+        <!-- Group 1: File/Content Actions -->
+        <div class="toolbar-group">
+          <button id="upload-btn" title="Upload File">
+            <span class="icon">📁</span> Upload
+          </button>
+          <input type="file" id="file-input" hidden multiple />
+          <button id="paste-btn" title="Paste Text">
+            <span class="icon">📝</span> Paste
+          </button>
+          <button id="clear-canvas-btn" title="Clear Canvas">
+            <span class="icon">🗑️</span> Clear All
+          </button>
+        </div>
+        <!-- Group 2: Search & Filter -->
+        <div class="toolbar-group search-group" style="display: none">
+          <span class="icon search-icon">🔍</span>
+          <input
+            type="search"
+            id="search-input"
+            placeholder="Search content..."
+          />
+          <button
+            id="filter-type-btn"
+            title="Filter by Type"
+            style="display: none"
+          >
+            Type
+          </button>
+          <button
+            id="filter-date-btn"
+            title="Filter by Date"
+            style="display: none"
+          >
+            Date
+          </button>
+          <button
+            id="filter-tag-btn"
+            title="Filter by Tag"
+            style="display: none"
+          >
+            Tag
+          </button>
+        </div>
+        <!-- Group 3: View & Navigation -->
+        <div class="toolbar-group">
+          <button id="zoom-in-btn" title="Zoom In">
+            <span class="icon">+</span>
+          </button>
+          <button id="zoom-out-btn" title="Zoom Out">
+            <span class="icon">-</span>
+          </button>
+          <button id="zoom-fit-btn" title="Zoom to Fit All">Fit</button>
+          <button id="history-back-btn" title="Navigate Back" disabled>
+            <span class="icon">←</span>
+          </button>
+          <button id="history-forward-btn" title="Navigate Forward" disabled>
+            <span class="icon">→</span>
+          </button>
+        </div>
+        <!-- Group 4: Bookmarks -->
+        <div class="toolbar-group">
+          <button id="save-view-btn" title="Save Current View">
+            <span class="icon">💾</span> Save this Section
+          </button>
+          <select id="bookmarks-list" title="Go to Bookmark">
+            <option value="">Saved Sections</option>
+          </select>
+        </div>
+        <!-- Group 5: Info & Settings (Right Aligned) -->
+        <div class="toolbar-group info-group">
+          <button id="qr-toggle-btn" title="Show/Hide QR Code">
+            <span class="icon">🔗</span> Connect
+          </button>
+          <span id="user-count" title="Connected Users"
+            ><span class="icon">👥</span> ?</span
+          >
+          <button
+            id="grid-snap-toggle"
+            title="Toggle Grid Snap"
+            style="display: none"
+          >
+            Grid
+          </button>
+        </div>
+      </div>
+      <!-- End .toolbar-content -->
+    </div>
+    <!-- End #toolbar -->
 
     <!-- Container for the QR Code (initially hidden) -->
     <div id="qr-container" class="hidden">
@@ -93,7 +143,7 @@
 
     <!-- Context menu for item actions (e.g., delete), initially hidden -->
     <div id="context-menu" class="hidden">
-      <button id="pin-btn">Pin Item</button> 
+      <button id="pin-btn">Pin Item</button>
       <button id="delete-btn">Delete Item</button>
       <button id="download-btn" class="hidden">Download File</button>
       <!-- Placeholder for Tag editing action -->
@@ -145,8 +195,14 @@
     <div id="bookmark-dialog" class="modal hidden">
       <div class="modal-content">
         <h3>Save Current View</h3>
-        <input type="text" id="bookmark-name-input" placeholder="Name this section" autocomplete="off" />
-        <p id="bookmark-error" class="error-message hidden"></p> <!-- Error message area -->
+        <input
+          type="text"
+          id="bookmark-name-input"
+          placeholder="Name this section"
+          autocomplete="off"
+        />
+        <p id="bookmark-error" class="error-message hidden"></p>
+        <!-- Error message area -->
         <div class="modal-buttons">
           <button id="bookmark-save-btn">Save Section</button>
           <button id="bookmark-cancel-btn">Cancel</button>
@@ -154,9 +210,38 @@
       </div>
     </div>
 
-    
-
-    
+    <!-- User List Modal (initially hidden) -->
+    <div id="user-list-dialog" class="modal hidden">
+      <div class="modal-content">
+        <h3>Connected Users</h3>
+        <ul
+          id="user-list-ul"
+          style="
+            list-style: none;
+            padding: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+            border: 1px solid var(--border-color);
+            border-radius: var(--element-radius);
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+          "
+        >
+          <!-- User list items will be added here by JS -->
+          <li>Loading...</li>
+        </ul>
+        <div class="modal-buttons" style="justify-content: center">
+          <!-- Centered button -->
+          <button
+            id="user-list-close-btn"
+            style="background: var(--primary); color: white"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Load Socket.IO client library -->
     <script src="/socket.io/socket.io.js"></script>

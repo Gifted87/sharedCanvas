@@ -836,3 +836,46 @@ body.disconnected .toolbar-tab {
   font-size: 1.2em;
 } */
 }
+
+/* Add to style.css */
+.help-text {
+  white-space: pre-wrap;
+  text-align: left;
+  font-family: monospace;
+  line-height: 1.4;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+/* Add to style.css */
+#user-list-ul li {
+  padding: 8px 15px; /* More padding */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* Subtle border */
+  font-size: 1em; /* Slightly larger font */
+  color: var(--text-primary);
+  display: flex; /* Use flex for alignment */
+  justify-content: space-between; /* Space between name and indicator */
+  align-items: center;
+}
+#user-list-ul li:last-child {
+  border-bottom: none;
+}
+#user-list-ul li .you-indicator { /* Style for highlighting 'You' */
+  font-style: italic;
+  color: var(--primary); /* Make 'You' stand out more */
+  margin-left: 10px;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+/* Make user count span clickable */
+#user-count {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+#user-count:hover {
+    background-color: var(--secondary-hover); /* Add hover effect */
+}

@@ -27,6 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const qrToggleBtn = document.getElementById("qr-toggle-btn");
   const qrCloseBtn = document.getElementById("qr-close-btn");
   const userCountSpan = document.getElementById("user-count");
+  const userListDialog = document.getElementById('user-list-dialog');
+  const userListUL = document.getElementById('user-list-ul');
+  const userListCloseBtn = document.getElementById('user-list-close-btn');
 
   const uploadBtn = document.getElementById("upload-btn");
   const fileInput = document.getElementById("file-input");
@@ -85,6 +88,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const bookmarkCancelBtn = document.getElementById('bookmark-cancel-btn');
   const bookmarkError = document.getElementById('bookmark-error');
 
+  const USER_ID_KEY = 'sharedCanvasUserID';
+  const NICKNAME_KEY = 'sharedCanvasNickname';
+
   // --- State ---
   let items = []; // Local cache of canvas items
   let myUserID = null; // Assigned by server after nickname
@@ -94,10 +100,34 @@ document.addEventListener("DOMContentLoaded", () => {
   let bookmarks = []; // User's saved view bookmarks
   let isAttemptingReconnect = false; // Flag to track reconnect state
 
+  let storedUserID = null;
+  let storedNickname = null;
+  let attemptedReIdentify = false; // Flag to prevent multiple re-identify attempts per connection
+
   let selectedItem = null; // The currently selected item object
   let draggedItem = null; // The item currently being dragged
   const imageCache = {}; // Cache for loaded image objects
   let highlightedItemIDs = new Set(); // IDs of items matching search/filter
+
+  try {
+    storedUserID = localStorage.getItem(USER_ID_KEY);
+    storedNickname = localStorage.getItem(NICKNAME_KEY);
+    if (storedUserID && storedNickname) {
+      console.log(`[Client] Found stored credentials: UserID=${storedUserID}, Nickname=${storedNickname}`);
+      // Don't show nickname dialog immediately if we have stored credentials
+      nicknameDialog.classList.add('hidden');
+    } else {
+      console.log("[Client] No valid stored credentials found.");
+      // Ensure dialog is shown if no credentials (it should be visible by default CSS/HTML)
+      nicknameDialog.classList.remove('hidden');
+      // We might need nicknameInput.focus() later if connection fails and we show it again
+    }
+  } catch (e) {
+    console.warn("LocalStorage access error on startup:", e);
+    // Proceed without stored credentials, ensure dialog is visible
+    nicknameDialog.classList.remove('hidden');
+  }
+
 
   // --- Canvas Viewport State ---
   let zoom = 0.5; // Initial zoom level
@@ -179,6 +209,51 @@ document.addEventListener("DOMContentLoaded", () => {
       y: (screenY - offsetY) / zoom,
     };
   }
+
+  function populateUserList() {
+    if (!userListUL) return;
+    userListUL.innerHTML = ''; // Clear previous list
+
+    let userAdded = false;
+
+    // Add current user first (if identified)
+    if (myUserID && myNickname) {
+      const li = document.createElement('li');
+      li.textContent = myNickname;
+      const youSpan = document.createElement('span');
+      youSpan.className = 'you-indicator';
+      youSpan.textContent = '(You)';
+      li.appendChild(youSpan);
+      userListUL.appendChild(li);
+      userAdded = true;
+    }
+
+    // Add other users from userMap
+    Object.entries(userMap).forEach(([userID, nickname]) => {
+      // Skip if it's the current user (already added)
+      if (userID === myUserID) return;
+
+      const li = document.createElement('li');
+      // Display nickname or fallback to partial ID
+      li.textContent = nickname || `User...${userID.substring(userID.length - 6)}`;
+      userListUL.appendChild(li);
+      userAdded = true;
+    });
+
+    // Handle case where only self or no one is connected
+    if (!userAdded || userListUL.children.length === 0) {
+      // Check if list is empty after attempting to add users
+      const li = document.createElement('li');
+      li.textContent = 'Only you are connected.';
+      if (!myUserID) { // If user isn't even identified yet
+        li.textContent = 'Connecting...';
+      }
+      li.style.fontStyle = 'italic';
+      li.style.color = 'var(--text-secondary)';
+      userListUL.appendChild(li);
+    }
+  }
+
 
   function worldToScreen(worldX, worldY) {
     // Converts world coordinates to screen coordinates (CSS pixels relative to canvas top-left)
@@ -397,6 +472,24 @@ document.addEventListener("DOMContentLoaded", () => {
     // This is called after interactions typically, but redrawing might imply state change
     // updateHistory(); // Let interactions trigger history recording explicitly
   }
+
+  userCountSpan.addEventListener('click', () => {
+    // Don't show if disconnected or not identified? Or show placeholder? Let's allow showing.
+    // if (!myUserID) return;
+    populateUserList(); // Populate the list with current data
+    userListDialog.classList.remove('hidden'); // Show the modal
+  });
+
+  userListCloseBtn.addEventListener('click', () => {
+    userListDialog.classList.add('hidden');
+  });
+
+  // Close modal if clicking outside the content
+  userListDialog.addEventListener('click', (e) => {
+    if (e.target === userListDialog) { // Check if click is on the backdrop itself
+      userListDialog.classList.add('hidden');
+    }
+  });
 
   // --- Drawing Specific Item Types ---
 
@@ -1118,28 +1211,49 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Socket Event Handlers ---
   socket.on("connect", () => {
     console.log("Connected to server:", socket.id);
+    attemptedReIdentify = false;
     isAttemptingReconnect = false; // Successfully connected/reconnected
     hideReconnectingIndicator(); // Hide indicator on successful connection/reconnection
 
-    // Check if this is a RECONNECT event after a prior connection
-    if (myUserID && myNickname) {
-      console.log(
-        `Reconnected as ${myNickname} (${myUserID}). Re-identifying...`
-      );
-      // Send existing credentials to the server to re-associate the new socket.id
-      socket.emit("re-identify", {
-        storedUserID: myUserID,
-        storedNickname: myNickname,
-      });
-      // The server should respond (e.g., with 'init' or 'reconnect-success')
-      // to confirm and provide potentially updated state.
-    } else {
-      console.log("Initial connection or state lost. Waiting for nickname.");
-      // This is the first connection, or state was lost (e.g., browser refresh)
-      // Ensure nickname dialog is visible if needed (it should be by default)
-      nicknameDialog.classList.remove("hidden");
+    if (storedUserID && storedNickname && !attemptedReIdentify) {
+      console.log(`Connected. Attempting to re-identify as ${storedNickname} (${storedUserID})...`);
+      socket.emit('re-identify', { storedUserID: storedUserID, storedNickname: storedNickname });
+      attemptedReIdentify = true; // Mark that we've tried for this connection
+    } else if (!myUserID && !storedUserID) {
+      // If it's a truly fresh connection with no stored ID and we aren't already identified
+      console.log("Initial connection. Waiting for nickname.");
+      nicknameDialog.classList.remove('hidden'); // Ensure dialog is visible
       nicknameInput.focus();
+    } else {
+      // Already identified (myUserID is set) or already attempted re-identify
+      console.log("Connected/Reconnected. State:", { myUserID, storedUserID, attemptedReIdentify });
     }
+  });
+
+  socket.on('reconnect-error', (message) => {
+    console.error("Re-identification failed:", message);
+    alert(`Could not reconnect session: ${message}. Please rejoin.`);
+    // Clear stored credentials as they are invalid/occupied
+    try {
+      localStorage.removeItem(USER_ID_KEY);
+      localStorage.removeItem(NICKNAME_KEY);
+      console.log("[Client] Cleared invalid credentials from localStorage.");
+    } catch (e) { console.warn("LocalStorage remove error:", e); }
+    // Clear runtime variables
+    storedUserID = null;
+    storedNickname = null;
+    myUserID = null; // Force re-authentication
+    myNickname = null;
+    attemptedReIdentify = false; // Reset flag
+
+    // Force back to nickname dialog state
+    resetClientState(); // Use the existing reset function if it suits, or ensure dialog is shown
+    nicknameDialog.classList.remove('hidden');
+    nicknameInput.value = '';
+    nicknameError.textContent = `Session error: ${message}. Please enter a new nickname.`;
+    nicknameError.classList.remove('hidden');
+    nicknameInput.focus();
+    // socket.disconnect(); // Optional: Force disconnect if server didn't already
   });
 
   socket.on("disconnect", (reason) => {
@@ -1233,10 +1347,24 @@ document.addEventListener("DOMContentLoaded", () => {
     myNickname = data.nickname;
     nicknameDialog.classList.add("hidden"); // Hide modal
     nicknameError.classList.add("hidden");
-    // Client is now authenticated, wait for 'init' event for state
-    // Re-enable UI in case it was disabled during connection attempt
+
+    // Save to localStorage
+    try {
+      localStorage.setItem(USER_ID_KEY, data.userID);
+      localStorage.setItem(NICKNAME_KEY, data.nickname);
+      console.log("[Client] Saved credentials to localStorage.");
+      // Update runtime stored variables too
+      storedUserID = data.userID;
+      storedNickname = data.nickname;
+    } catch (e) {
+      console.warn("LocalStorage write error:", e);
+      // App continues, just won't remember next time
+    }
+
+
     document.body.classList.remove("disconnected");
     hideReconnectingIndicator();
+    // Wait for 'init' event for state
   });
 
   socket.on("nickname-error", (errorMessage) => {
@@ -1245,38 +1373,109 @@ document.addEventListener("DOMContentLoaded", () => {
     // Keep nickname dialog open
     document.body.classList.remove("disconnected"); // Allow interaction with dialog
     hideReconnectingIndicator();
+
+    // Clear potentially stored invalid credentials if error occurs ---
+    // (Optional, but good practice if e.g. name is taken for a stored ID)
+    try {
+      localStorage.removeItem(USER_ID_KEY);
+      localStorage.removeItem(NICKNAME_KEY);
+      storedUserID = null;
+      storedNickname = null;
+      console.log("[Client] Cleared stored credentials due to nickname error.");
+    } catch (e) { console.warn("LocalStorage remove error:", e); }
+
   });
+
   // Initial State & Updates
-  // Initial State & Updates
+  // --- MODIFIED: Initial State & Updates ---
   socket.on("init", (data) => {
-    console.log("Received initial state from server.");
-    // This now handles both initial load AND state sync after successful reconnect
+    console.log("[Client] Received 'init' event from server."); // More specific log
+    if (!data) {
+      console.error("[Client] Received invalid 'init' data (null or undefined). Cannot initialize.");
+      return; // Stop processing if data is invalid
+    }
+
+    // --- NEW/CRITICAL: Set local user credentials if re-identifying ---
+    // This must happen BEFORE redrawCanvas is called.
+    if (!myUserID && storedUserID) { // If we don't have a runtime ID but had a stored one
+      console.log(`[Client] Applying stored UserID: ${storedUserID} from successful init/re-identify.`);
+      myUserID = storedUserID; // Assign the stored ID - THIS IS THE KEY FIX
+      // Try to get nickname from the received userMap
+      if (data.users && data.users[myUserID]) {
+        myNickname = data.users[myUserID];
+        console.log(`[Client] Found nickname in init data: ${myNickname}`);
+        // Update localStorage nickname in case it changed server-side (e.g. conflict resolution)
+        try { if (localStorage.getItem(NICKNAME_KEY) !== myNickname) localStorage.setItem(NICKNAME_KEY, myNickname); } catch (e) { }
+      } else if (storedNickname) {
+        myNickname = storedNickname; // Fallback to stored nickname if not in map yet
+        console.log(`[Client] Using stored nickname: ${myNickname}`);
+      } else {
+        myNickname = "User"; // Absolute fallback
+        console.warn("[Client] Could not determine nickname after re-identify.");
+      }
+      // Update storedNickname variable as well
+      storedNickname = myNickname;
+
+    } else if (myUserID && data.users && data.users[myUserID] && myNickname !== data.users[myUserID]) {
+      // Existing logic to update nickname if it changed server-side while connected
+      console.log(`[Client] Updating local nickname to match server state: ${data.users[myUserID]}`);
+      myNickname = data.users[myUserID];
+      try { localStorage.setItem(NICKNAME_KEY, myNickname); } catch (e) { }
+    }
+    // --- End NEW/CRITICAL section ---
+
+    // Now process the rest of the data...
     items = data.items || [];
     userMap = data.users || {};
-    bookmarks = data.bookmarks || []; // Receive own bookmarks based on userID
-    otherUsersPresence = data.presence || {}; // Receive current presence
+    bookmarks = data.bookmarks || [];
+    otherUsersPresence = data.presence || {};
+
+    console.log(`[Client] State updated. User: ${myNickname} (${myUserID}). Items: ${items.length}, Users: ${Object.keys(userMap).length}`);
+
     updateUserCount(Object.keys(userMap).length);
     updateBookmarksList();
     preloadImages(items);
+
+    // Ensure nickname dialog is hidden after successful init/re-identify
+    nicknameDialog.classList.add('hidden');
+
+    // --- Check if myUserID is now set before drawing ---
+    if (!myUserID) {
+      console.error("[Client] Cannot redraw canvas after 'init' - myUserID is still not set! Identification failed.");
+      // Force back to nickname entry if identification somehow failed
+      resetClientState(); // Reset everything
+      nicknameDialog.classList.remove('hidden');
+      nicknameError.textContent = "Session identification failed. Please enter a nickname.";
+      nicknameError.classList.remove('hidden');
+      nicknameInput.focus();
+      return; // Prevent drawing without ID
+    }
+
+    // Now redraw should work because myUserID is set
+    console.log(`[Client] Calling redrawCanvas and redrawMinimap (User ID: ${myUserID})`);
     redrawCanvas();
     redrawMinimap();
 
-    // Only zoom-to-fit on FIRST successful init, not necessarily on reconnect sync
-    if (historyBackStack.length === 0 && historyForwardStack.length === 0) {
-      zoomToFitAll(true); // Zoom to fit initial items immediately
+    // Zoom to fit only on first load, not usually after reconnect/sync
+    if (historyBackStack.length === 0 && historyForwardStack.length === 0 && items.length > 0) {
+      console.log("[Client] Performing initial zoom-to-fit.");
+      zoomToFitAll(true);
+    } else if (items.length === 0) {
+      // Reset view if canvas is empty after init
+      console.log("[Client] Canvas is empty after init, resetting view.");
+      zoom = 0.5; // Reset zoom
+      offsetX = canvas.clientWidth / 2; // Center roughly
+      offsetY = canvas.clientHeight / 2;
+      redrawCanvas(); // Redraw with reset view
+      redrawMinimap();
     }
 
-    historyBackStack = []; // Clear history on init/reconnect state sync
+    historyBackStack = [];
     historyForwardStack = [];
     updateHistoryButtons();
-
-    // Ensure UI is enabled and indicator is hidden
     hideReconnectingIndicator();
     document.body.classList.remove("disconnected");
-
-    console.log(
-      `Initialization/Sync complete. User: ${myNickname} (${myUserID})`
-    );
+    console.log(`[Client] Initialization/Sync complete.`);
   });
 
   socket.on("user-updated", (userData) => {
@@ -1284,18 +1483,25 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log(`User updated: ${userData.nickname} (${userData.userID})`);
     userMap[userData.userID] = userData.nickname;
     updateUserCount(Object.keys(userMap).length);
-    redrawCanvas(); // Redraw needed if nickname display changes on items/presence
+    // If the user list modal is open, refresh it
+    if (!userListDialog.classList.contains('hidden')) {
+      populateUserList();
+    }
+    redrawCanvas();
   });
 
   socket.on("user-left", (data) => {
     if (!data || !data.userID) return;
-    console.log(
-      `User left: ${userMap[data.userID] || "Unknown"} (${data.userID})`
-    );
+    console.log(`User left: ${userMap[data.userID] || 'Unknown'} (${data.userID})`);
+    const leftNickname = userMap[data.userID]; // Store nickname before deleting
     delete userMap[data.userID];
-    delete otherUsersPresence[data.userID]; // Remove presence data
+    delete otherUsersPresence[data.userID];
     updateUserCount(Object.keys(userMap).length);
-    redrawCanvas(); // Redraw needed to remove presence indicators etc.
+    // If the user list modal is open, refresh it
+    if (!userListDialog.classList.contains('hidden')) {
+      populateUserList();
+    }
+    redrawCanvas();
   });
 
   socket.on("item-added", (item) => {
@@ -3219,120 +3425,84 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // --- Handle File Type ---
-      if (file.type.startsWith("image/")) {
-        // Handle image files by reading as data URL (client-side processing)
-        manageProgressUI(uploadId, "processing");
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          socket.emit("add-item", {
-            type: "image",
-            content: e.target.result, // base64 data URL
-            x: fileX,
-            y: fileY,
-            originalName: file.name,
-            // Note: width/height will be calculated on first draw if needed
-          });
-          manageProgressUI(uploadId, "completed"); // Mark as complete
-        };
-        reader.onerror = (err) => {
-          console.error(`FileReader error for ${file.name}:`, err);
-          manageProgressUI(uploadId, "error", 0, `Could not read image file`);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        // Handle other files by uploading via XMLHttpRequest for progress
-        manageProgressUI(uploadId, "uploading", 0); // Set initial state to 0%
+      // --- Handle ALL file types by uploading via XMLHttpRequest ---
+      // No special FileReader case for images anymore
 
-        const xhr = new XMLHttpRequest();
-        const formData = new FormData();
-        formData.append("file", file); // Field name must match server (multer expects 'file')
+      // Immediately set state to uploading for UI feedback
+      manageProgressUI(uploadId, "uploading", 0);
 
-        // Progress Handler
-        xhr.upload.addEventListener("progress", (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            manageProgressUI(uploadId, "uploading", percentComplete);
-          } else {
-            // Cannot compute progress (e.g., chunked transfer encoding)
-            // Show indeterminate state? For now, just stays at 0% or last known %.
-            // manageProgressUI(uploadId, 'uploading', -1); // Could use -1 to indicate indeterminate
-            console.log(`Upload progress not computable for ${file.name}`);
-          }
-        });
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("file", file); // Field name matches server multer config
 
-        // Completion Handler (Load event fires for both success and error statuses)
-        xhr.addEventListener("load", () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            // Success statuses
-            try {
-              const result = JSON.parse(xhr.responseText);
-              // Check if server actually returned expected data
-              if (result && result.path && result.originalname) {
-                socket.emit("add-item", {
-                  type: "file",
-                  content: result.path, // Server path (e.g., /uploads/uuid.ext)
-                  x: fileX,
-                  y: fileY,
-                  originalName: result.originalname,
-                  mimetype: result.mimetype,
-                });
-                manageProgressUI(uploadId, "completed");
-              } else {
-                console.error(
-                  `Invalid success response for ${file.name}:`,
-                  xhr.responseText
-                );
-                manageProgressUI(
-                  uploadId,
-                  "error",
-                  0,
-                  "Invalid server response"
-                );
-              }
-            } catch (parseError) {
-              console.error(
-                `Error parsing upload response for ${file.name}:`,
-                parseError,
-                xhr.responseText
-              );
-              manageProgressUI(uploadId, "error", 0, "Server response error");
+      // Progress Handler (remains the same)
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          manageProgressUI(uploadId, "uploading", percentComplete);
+        } else {
+          console.log(`Upload progress not computable for ${file.name}`);
+        }
+      });
+
+      // Completion Handler (Load event - Modified to determine item type)
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Success statuses
+          try {
+            const result = JSON.parse(xhr.responseText);
+            // Check if server returned expected data
+            if (result && result.path && result.originalname && result.mimetype) { // Check mimetype exists
+              // Determine item type based on mimetype from server response
+              const itemType = result.mimetype.startsWith('image/') ? 'image' : 'file'; // <-- Key change here
+
+              socket.emit("add-item", {
+                type: itemType,                 // <-- Use determined type
+                content: result.path,           // Server path (e.g., /uploads/uuid.ext)
+                x: fileX,
+                y: fileY,
+                originalName: result.originalname,
+                mimetype: result.mimetype,      // Store mimetype
+                // Width/Height for images will be determined on first draw by drawImage
+              });
+              manageProgressUI(uploadId, "completed");
+            } else {
+              console.error(`Invalid success response for ${file.name}:`, xhr.responseText);
+              manageProgressUI(uploadId, "error", 0, "Invalid server response");
             }
-          } else {
-            // Handle HTTP error status (4xx, 5xx)
-            let errorMsg = `Upload failed (${xhr.status})`;
-            try {
-              // Try to parse error message from server JSON response
-              const errorJson = JSON.parse(xhr.responseText);
-              errorMsg = errorJson.error || errorMsg;
-            } catch (_) {
-              /* Ignore parsing error if response is not JSON */
-            }
-            console.error(
-              `Upload failed for ${file.name}: ${xhr.status} ${xhr.statusText}`,
-              xhr.responseText
-            );
-            manageProgressUI(uploadId, "error", 0, errorMsg);
+          } catch (parseError) {
+            console.error(`Error parsing upload response for ${file.name}:`, parseError, xhr.responseText);
+            manageProgressUI(uploadId, "error", 0, "Server response error");
           }
-        });
+        } else {
+          // Handle HTTP error status (4xx, 5xx)
+          let errorMsg = `Upload failed (${xhr.status})`;
+          try {
+            const errorJson = JSON.parse(xhr.responseText);
+            errorMsg = errorJson.error || errorMsg;
+          } catch (_) { /* Ignore parsing error */ }
+          console.error(`Upload failed for ${file.name}: ${xhr.status} ${xhr.statusText}`, xhr.responseText);
+          manageProgressUI(uploadId, "error", 0, errorMsg);
+        }
+      });
 
-        // Network Error Handler
-        xhr.addEventListener("error", () => {
-          console.error(`Network error during upload for ${file.name}`);
-          manageProgressUI(uploadId, "error", 0, "Network error");
-        });
+      // Network Error Handler (remains the same)
+      xhr.addEventListener("error", () => {
+        console.error(`Network error during upload for ${file.name}`);
+        manageProgressUI(uploadId, "error", 0, "Network error");
+      });
 
-        // Abort Handler (Optional - if you add a cancel button)
-        xhr.addEventListener("abort", () => {
-          console.log(`Upload aborted for ${file.name}`);
-          manageProgressUI(uploadId, "error", 0, "Aborted"); // Or just remove silently
-        });
+      // Abort Handler (remains the same)
+      xhr.addEventListener("abort", () => {
+        console.log(`Upload aborted for ${file.name}`);
+        manageProgressUI(uploadId, "error", 0, "Aborted"); // Or just remove silently
+      });
 
-        // Send the request
-        xhr.open("POST", "/upload", true); // POST to the '/upload' endpoint
-        // Set headers if needed (e.g., authentication)
-        // xhr.setRequestHeader('Authorization', 'Bearer YOUR_TOKEN');
-        xhr.send(formData);
-      }
+      // Send the request (remains the same)
+      xhr.open("POST", "/upload", true);
+      xhr.send(formData);
+
+      // --- End of XHR block --- (This comment helps clarify the pasted block ends here)
     });
 
     // Initial check in case no files were processed (e.g., empty fileList)
